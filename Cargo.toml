@@ -2,3 +2,11 @@
 name = "dy"
 version = "0.0.0"
 authors = ["ds2dy3"]
+
+[lib]
+name = "dy"
+path = "src/lib.rs"
+
+[[bin]]
+name = "main"
+path = "src/main.rs"
