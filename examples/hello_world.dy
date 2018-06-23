@@ -1,0 +1,12 @@
+
+namespace HelloWorld {
+
+	public static int Add(int a, int b) {
+		return a + b
+	}
+
+	public static void Main() {
+		println(Add(1, 2))
+		println("Hello World!")
+	}
+}

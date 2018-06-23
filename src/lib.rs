@@ -1,2 +1,2 @@
-mod vm
-mod module
+mod vm;
+mod module;
