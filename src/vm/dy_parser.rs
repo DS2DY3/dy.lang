@@ -1,11 +1,11 @@
 
-enum BlockState {
+pub enum BlockState {
 	None,
 	CommentBlock,
 	StringBlock,
 }
 
-enum RegionKind {
+pub enum RegionKind {
 	None,
 	Region,
 	If,
@@ -18,20 +18,22 @@ enum RegionKind {
 	InactiveElse,
 }
 
-struct RegionTree {
+pub struct RegionTree {
 	kind: RegionKind,
-	line: FormatedLline,
-	parent: Box<RegionTree>,
-	children: Vec<RegionTree>,
+	line: FormatedLine,
+    parent: Option<Weak<RefCell<Box<RegionTree>>>>,
+	children: Option<Vec<Rc<RefCell<Box<RegionTree>>>>>,
 }
 
 
-struct FormatedLline {
+pub struct FormatedLine {
 	block_state: BlockState,
-	// region_tree: RegionTree,
+    region_tree: Option<Rc<RegionTree>>,
+    index: i32,
+    tokens: Option<Vec<SyntaxToken>>,
 }
 
-enum TokenKind {
+pub enum TokenKind {
 	Missing,
 	Whitespace,
 	Comment,
@@ -58,8 +60,17 @@ enum TokenKind {
 	EOF,
 }
 
-struct SyntaxToken {
-	token_kind: TokenKind,
+pub struct SyntaxToken {
+	pub kind: TokenKind,
+    pub text: str,
+
+}
+
+fn scan_char_literal(line: str, start: & mut i32) -> SyntaxToken {
+
+}
+
+fn scan_whitespace(line: str, start: & mut i32) -> SyntaxToken {
 
 }
 
@@ -80,6 +91,26 @@ const BUILT_TYPES: [&'static str; 16] = ["bool", "byte", "char", "decimal", "dou
 
 const PREPROCESSOR_KEY_WORLDS: [&'static str; 12] = ["define", "elif", "else", "endif", "endregion", "error", "if", "line", "pragma", "region", "undef", "warning"];
 
-struct DyParser {
+pub struct DyParser<'a> {
+	pub lines: Vec<&'a str>,
+	pub root_region: RegionTree<'a>,
+}
 
+impl<'a> DyParser<'a> {
+	pub fn parser(&self, code_content : & String) {
+		self.lines = code_content.replace("\r\n", "\n").replace("\r", "\n").split("\n").collect();
+	}
+
+	pub fn parse_line() {
+
+	}
+
+	pub fn lex_line() {
+
+	}
+
+	pub fn tokenize() {
+
+	}
+    pub fn
 }
