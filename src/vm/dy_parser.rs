@@ -150,22 +150,22 @@ enum TokenKind {
 struct SyntaxToken {
     kind: TokenKind,
 
-
 }
 
 #[derive(Debug)]
 pub struct DyParser {
     source: Vec<char>,
-    formatted_lines: Vec<FormatedLine>,
+    formated_lines: Vec<FormatedLine>,
 
 }
 
 impl DyParser {
+
     pub fn new(code : String) -> DyParser  {
         let source = code.chars().collect();
         DyParser {
             source,
-            formatted_lines: Vec::new(),
+            formated_lines: Vec::new(),
         }
     }
 
@@ -179,14 +179,43 @@ impl DyParser {
             }
             else {
                 if has_line_char {
-                    let pre_line_end: i32 = (index as i32) - 1;
-                    let formated_line = FormatedLine::new(formated_line_count, pre_line_begin, pre_line_end);
-                    self.formatted_lines.push(formated_line);
+                    let pre_line_end = index - 1;
+                    let mut formated_line = FormatedLine::new(formated_line_count, pre_line_begin, pre_line_end);
+                    self.tokenize(&mut formated_line);
+                    self.formated_lines.push(formated_line);
                     formated_line_count += 1;
-                    pre_line_begin = index as i32;
+                    pre_line_begin = index;
                 }
                 has_line_char = false;
             }
+        }
+    }
+
+    fn scan_whitespace(&self, mut start_at: usize, end_at: usize) ->Option<SyntaxToken> {
+        if start_at < 0 || start_at > end_at {
+            return None;
+        }
+        let begin = start_at;
+        while start_at < end_at && (self.source[start_at] == ' ' || self.source[start_at] == '\t') {
+            start_at += 1;
+
+        }
+        if start_at == begin {
+            return None;
+        }
+        return Some(SyntaxToken {
+            kind: TokenKind::Whitespace,
+        });
+
+    }
+
+    fn tokenize(&self, formated_line: &mut FormatedLine) {
+        let start_at = formated_line.begin_at;
+        let mut start_at = start_at;
+        let end_at = formated_line.end_at;
+        let ws = self.scan_whitespace(start_at, end_at);
+        if let Some(x) = ws {
+            formated_line.tokens.push(x);
         }
     }
 }
@@ -194,17 +223,17 @@ impl DyParser {
 #[derive(Debug)]
 struct FormatedLine {
     index: i32,
-    begin: i32,
-    end: i32,
+    begin_at: usize,
+    end_at: usize,
     tokens: Vec<SyntaxToken>,
 }
 
 impl FormatedLine {
-    fn new(index: i32, begin: i32, end: i32) -> FormatedLine {
+    fn new(index: i32, begin_at: usize, end_at: usize) -> FormatedLine {
         FormatedLine{
             index,
-            begin,
-            end,
+            begin_at,
+            end_at,
             tokens: Vec::new(),
         }
     }
