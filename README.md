@@ -2,6 +2,6 @@
 
 This is a C# like dynamic typed script language!
 
-Do it yourself, and make it different!
+Just do it yourself, and make it difference!
 
 All is garbage!
