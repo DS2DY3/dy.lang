@@ -382,9 +382,55 @@ impl DyParser {
 
     }
 
-    fn scan_unicode_escape_char(&self, mut start_at: usize, end_at: usize) -> Option<SyntaxToken> {
+    fn scan_hex_digit(&self, mut start_at: usize, end_at: usize) -> bool {
+        if start_at > end_at {
+            return false;
+        }
+        let ch = self.source[start_at];
+        if (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' || ch < 'F') {
+            start_at += 1;
+            return true;
+        }
+        return false;
+    }
+
+    fn scan_unicode_escape_char(&self, mut start_at: usize, end_at: usize) -> bool {
+        if start_at > end_at - 5 {
+            return false;
+        }
+        if self.source[start_at] != '\\' {
+            return false;
+        }
+        let mut begin = start_at + 1;
+        let mut n = 0;
+        if self.source[begin] == 'u' {
+            n = 4;
+        }
+        else if self.source[begin] == 'U' {
+            n = 8;
+        }
+        else {
+            return false;
+        }
+        begin += 1;
+        while n >= 0 {
+            if !self.scan_hex_digit(begin, end_at) {
+                break;
+            }
+            n -= 1;
+        }
+        if n == 0 {
+            start_at = begin;
+            return true;
+        }
+        return false;
+
+    }
+
+    fn scan_indentifier_or_keyword(&self, mut start_at: usize, end_at: usize) -> Option<SyntaxToken> {
         None
     }
+
 
     fn tokenize(&self, formated_line: &mut FormatedLine) {
         let start_at = formated_line.begin_at;
