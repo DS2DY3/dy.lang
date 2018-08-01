@@ -428,7 +428,60 @@ impl DyParser {
     }
 
     fn scan_indentifier_or_keyword(&self, mut start_at: usize, end_at: usize) -> Option<SyntaxToken> {
-        None
+        let mut identifier = false;
+        let begin = start_at;
+        if start_at > end_at {
+            return None;
+        }
+        let ch = self.source[start_at];
+        if ch == '@' {
+            identifier = true;
+            start_at += 1;
+        }
+        if start_at <= end_at {
+            let ch = self.source[start_at];
+            if ch.is_alphabetic() || ch == '_' {
+                start_at += 1;
+            }
+            else if !self.scan_unicode_escape_char(start_at, end_at) {
+                if begin == start_at {
+                    return None;
+                }
+                return Some(SyntaxToken{
+                    kind: TokenKind::Identifier,
+                    begin_at: begin,
+                    end_at: start_at-1,
+                })
+            }
+            else {
+                identifier = true;
+            }
+            while start_at <= end_at {
+                let ch = self.source[start_at];
+                if ch.is_alphabetic() || ch.is_digit(10) || ch == '_' {
+                    start_at += 1;
+                }
+                else if !self.scan_unicode_escape_char(start_at, end_at) {
+                    break;
+                }
+                else {
+                    identifier = true;
+                }
+            }
+        }
+        if identifier {
+            return Some(SyntaxToken{
+                kind: TokenKind::Identifier,
+                begin_at: begin,
+                end_at: start_at-1,
+            })
+        }
+        return Some(SyntaxToken{
+            kind: TokenKind::Keyword,
+            begin_at: begin,
+            end_at: start_at-1,
+        })
+
     }
 
 
