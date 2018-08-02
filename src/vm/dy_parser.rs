@@ -450,6 +450,127 @@ impl DyParser {
     }
 
 
+    // ------------------------------- help function -----------------------------------------------
+    fn source_equal(&self, start_at: usize, end_at: usize, text: &str) -> bool {
+        let chs = text.chars();
+        let len = chs.count();
+        // let end_at = self.source.len() - 1;
+        if end_at < start_at + len {
+            return false;
+        }
+        for (i, &ch) in chs.enumerate() {
+            if ch != self.source[start_at+i] {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    fn push_whitespace(&self, formated_line: &mut FormatedLine, start_at: &mut usize) -> bool {
+        let ws = self.scan_whitespace(start_at, formated_line.end_at);
+        if let some(x) = ws {
+            formated_line.tokens.push(x);
+            return true;
+        }
+        return false;
+    }
+    // ------------------------------ help function end --------------------------------------------
+
+    fn parse_pp_or_experssion(&self, formated_line: &mut FormatedLine, start_at: &mut usize) -> bool {
+        let end_at = formated_line.end_at;
+        if *start_at > end_at {
+            // todo: insert missing token
+            return true;
+        }
+        let lhs = self.parse_pp_and_expression(formated_line, start_at);
+        let begin = *start_at;
+        self.push_whitespace(formated_line, start_at);
+        let end_at = formated_line.end_at;
+        if self.source_equal(*start_at, end_at, "||")  {
+            let token = SyntaxToken::new(TokenKind::PreprocessorArguments, *start_at, *start_at+2);
+            formated_line.tokens.push(token);
+            *start_at += 2;
+            self.push_whitespace(formated_line, start_at);
+            let rhs = self.parse_pp_or_experssion(formated_line, start_at);
+            self.push_whitespace(formated_line, start_at);
+            return rhs || lhs
+        }
+        return lhs
+    }
+
+    fn parse_pp_and_experssion(&self, formated_line: &mut FormatedLine, start_at: &mut usize) -> bool {
+        let end_at = formated_line.end_at;
+        if *start_at > end_at {
+            // todo: insert missing token
+            return true;
+        }
+        let lhs = self.parse_pp_equal_expression(formated_line, start_at);
+        let begin = *start_at;
+        self.push_whitespace(formated_line, start_at);
+        let end_at = formated_line.end_at;
+        if self.source_equal(*start_at, end_at, "&&") {
+            let token = SyntaxToken::new(TokenKind::PreprocessorArguments, *start_at, *start_at+2);
+            formated_line.tokens.push(token);
+            *start_at += 2;
+            self.push_whitespace(formated_line, start_at);
+            let rhs = self.parse_pp_and_experssion(formated_line, start_at);
+            self.push_whitespace(formated_line, start_at);
+            return lhs && rhs;
+        }
+        return lhs
+    }
+
+    fn parse_pp_equal_experssion(&self, formated_line: &mut FormatedLine, start_at: &mut usize) -> bool {
+        let end_at = formated_line.end_at;
+        if *start_at > end_at {
+            // todo: insert missing token
+            return true;
+        }
+        let lhs = self.parse_pp_unary_expression(formated_line, start_at);
+        let begin = *start_at;
+        self.push_whitespace(formated_line, start_at);
+        let end_at = formated_line.end_at;
+        if self.source_equal(*start_at, end_at, "==") || self.source_equal(*start_at, end_at, "!=") {
+            let is_equal = self.source_equal(*start_at, end_at, "==");
+            let token = SyntaxToken::new(TokenKind::PreprocessorArguments, *start_at, *start_at+2);
+            formated_line.tokens.push(token);
+            *start_at += 2;
+            self.push_whitespace(formated_line, start_at);
+            let rhs = self.parse_pp_equal_experssion(formated_line, start_at);
+            self.push_whitespace(formated_line, start_at);
+            if is_equal {
+                return lhs == rhs;
+            }
+                else {
+                    return lhs != rhs;
+                }
+        }
+        return lhs
+    }
+
+    fn parse_pp_unary_experssion(&self, formated_line: &mut FormatedLine, start_at: &mut usize) -> bool {
+        let end_at = formated_line.end_at;
+        if *start_at > end_at {
+            // todo: insert missing token
+            return true;
+        }
+        let begin = *start_at;
+        self.push_whitespace(formated_line, start_at);
+        let end_at = formated_line.end_at;
+        if self.source[*start_at] == '!' {
+            let token = SyntaxToken::new(TokenKind::PreprocessorArguments, *start_at, *start_at+1);
+            formated_line.tokens.push(token);
+            *start_at += 2;
+            self.push_whitespace(formated_line, start_at);
+            let result = self.parse_pp_unary_experssion(formated_line, start_at);
+            self.push_whitespace(formated_line, start_at);
+            return !result;
+        }
+        return self.parse_pp_primary_expression(formated_line, start_at);
+    }
+
+
+
     fn tokenize(&self, formated_line: &mut FormatedLine) {
         let mut start_at = formated_line.begin_at;
         let end_at = formated_line.end_at;
