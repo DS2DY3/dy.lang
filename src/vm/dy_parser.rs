@@ -159,11 +159,13 @@ struct SyntaxToken {
     kind: TokenKind,
     begin_at: usize,
     end_at: usize,
-	
-    fn new(kind: TokenKind, begin_at: usize, end_at: usize) -> SyntaxToken {
-	    SyntaxToken{kind, begin_at, end_at}
-    }
 
+}
+
+impl SyntaxToken {
+    fn new(kind: TokenKind, begin_at: usize, end_at: usize) -> SyntaxToken {
+        SyntaxToken{kind, begin_at, end_at}
+    }
 }
 
 #[derive(Debug)]
@@ -205,101 +207,85 @@ impl DyParser {
         }
     }
 
-    fn scan_whitespace(&self, mut start_at: usize, end_at: usize) -> Option<SyntaxToken> {
-        if start_at < 0 || start_at > end_at {
+    fn scan_whitespace(&self, start_at: &mut usize, end_at: usize) -> Option<SyntaxToken> {
+        if *start_at < 0 || *start_at > end_at {
             return None;
         }
-        let begin = start_at;
-        while start_at <= end_at && (self.source[start_at] == ' ' || self.source[start_at] == '\t') {
-            start_at += 1;
+        let mut begin = *start_at;
+        while *start_at <= end_at && (self.source[*start_at] == ' ' || self.source[*start_at] == '\t') {
+            *start_at += 1;
         }
-        if start_at == begin {
+        if *start_at == begin {
             return None;
         }
-        return Some(SyntaxToken {
-            kind: TokenKind::Whitespace,
-            begin_at: begin,
-            end_at: start_at-1,
-        });
+        return Some(SyntaxToken::new(TokenKind::Whitespace, begin, *start_at-1));
 
     }
 
-    fn scan_word(&self, mut start_at: usize, end_at: usize) -> Option<SyntaxToken> {
-        let begin = start_at;
-        while start_at <= end_at {
-            let ch = self.source[start_at];
+    fn scan_word(&self, start_at: &mut usize, end_at: usize) -> Option<SyntaxToken> {
+        let begin = *start_at;
+        while *start_at <= end_at {
+            let ch = self.source[*start_at];
             if !ch.is_digit(10) && !ch.is_alphabetic() && ch != '_' {
                 break;
             }
-            start_at += 1;
+            *start_at += 1;
         }
-        return Some(SyntaxToken {
-            kind: TokenKind::Identifier,
-            begin_at: begin,
-            end_at: start_at-1,
-        });
+        return Some(SyntaxToken::new(TokenKind::Identifier, begin, *start_at-1));
     }
 
     // todo:需要检查异常情况？？
-    fn scan_char_literal(&self, mut start_at: usize, end_at: usize) -> Option<SyntaxToken> {
-        if self.source[start_at] != '\'' {
+    fn scan_char_literal(&self, start_at: &mut usize, end_at: usize) -> Option<SyntaxToken> {
+        if self.source[*start_at] != '\'' {
             return None;
         }
-        let begin = start_at;
-        while start_at <= end_at {
-            let ch = self.source[start_at];
+        let begin = *start_at;
+        while *start_at <= end_at {
+            let ch = self.source[*start_at];
             if ch == '\'' {
-                start_at += 1;
+                *start_at += 1;
                 break;
             }
-            if ch == '\\' && start_at < end_at -1 {
-                start_at += 1;
+            if ch == '\\' && *start_at < end_at -1 {
+                *start_at += 1;
             }
-            start_at += 1;
+            *start_at += 1;
         }
-        return Some(SyntaxToken {
-            kind: TokenKind::CharLiteral,
-            begin_at: begin,
-            end_at: start_at-1,
-        });
+        return Some(SyntaxToken::new(TokenKind::CharLiteral, begin, *start_at-1));
     }
 
-    fn scan_string_literal(&self, mut start_at: usize, end_at: usize) -> Option<SyntaxToken> {
-        if self.source[start_at] != '"' {
+    fn scan_string_literal(&self, start_at: &mut usize, end_at: usize) -> Option<SyntaxToken> {
+        if self.source[*start_at] != '"' {
             return None;
         }
-        let begin = start_at;
-        while start_at <= end_at {
-            let ch = self.source[start_at];
+        let begin = *start_at;
+        while *start_at <= end_at {
+            let ch = self.source[*start_at];
             if ch == '"' {
-                start_at += 1;
+                *start_at += 1;
                 break;
             }
-            if ch == '\\' && start_at < end_at -1 {
-                start_at += 1;
+            if ch == '\\' && *start_at < end_at {
+                *start_at += 1;
             }
-            start_at += 1;
+            *start_at += 1;
         }
-        return Some(SyntaxToken {
-            kind: TokenKind::StringLiteral,
-            begin_at: begin,
-            end_at: start_at-1,
-        });
+        return Some(SyntaxToken::new(TokenKind::StringLiteral, begin, *start_at-1));
     }
 
-    fn scan_number_literal(&self, mut start_at: usize, end_at: usize) -> Option<SyntaxToken> {
+    fn scan_number_literal(&self, start_at: &mut usize, end_at: usize) -> Option<SyntaxToken> {
         let mut hex = false;
         let mut point = false;
         let mut exponent = false;
-        let begin = start_at;
-        if self.source[start_at] == '0' &&  start_at < end_at - 1
-            && (self.source[start_at+1] == 'x' || self.source[start_at+1] == 'X') {
-            start_at += 2;
+        let begin = *start_at;
+        if self.source[*start_at] == '0' &&  *start_at < end_at
+            && (self.source[*start_at+1] == 'x' || self.source[*start_at+1] == 'X') {
+            *start_at += 2;
             hex = true;
-            while start_at <= end_at {
-                let ch = self.source[start_at];
+            while *start_at <= end_at {
+                let ch = self.source[*start_at];
                 if (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' || ch < 'F') {
-                    start_at += 1;
+                    *start_at += 1;
                 }
                 else {
                     break;
@@ -307,42 +293,34 @@ impl DyParser {
             }
         }
         else {
-            while start_at <= end_at &&  '0' <= self.source[start_at] && self.source[start_at] <= '9'{
-                start_at += 1;
+            while *start_at <= end_at &&  '0' <= self.source[*start_at] && self.source[*start_at] <= '9'{
+                *start_at += 1;
             }
         }
         if hex {
-            return Some(SyntaxToken {
-                kind: TokenKind::IntegerLiteral,
-                begin_at: begin,
-                end_at: start_at-1,
-            });
+            return Some(SyntaxToken::new(TokenKind::IntegerLiteral, begin, *start_at-1));
         }
-        if start_at > begin && start_at <= end_at {
-            let ch = self.source[start_at];
+        if *start_at > begin && *start_at <= end_at {
+            let ch = self.source[*start_at];
             if ch == 'l' || ch == 'L' || ch == 'u' || ch == 'U' {
-                start_at += 1;
-                if start_at <= end_at {
-                    let ch_next = self.source[start_at];
+                *start_at += 1;
+                if *start_at <= end_at {
+                    let ch_next = self.source[*start_at];
                     if (ch == 'l' || ch == 'L') && (ch_next == 'u' || ch_next == 'U') {
-                        start_at += 1;
+                        *start_at += 1;
                     }
                     else if ch_next == 'l' || ch_next == 'L' {
-                        start_at += 1;
+                        *start_at += 1;
                     }
                 }
-                return Some(SyntaxToken {
-                    kind: TokenKind::IntegerLiteral,
-                    begin_at: begin,
-                    end_at: start_at-1,
-                });
+                return Some(SyntaxToken::new(TokenKind::IntegerLiteral, begin, *start_at-1));
             }
         }
-        while start_at <= end_at {
-            let ch = self.source[start_at];
+        while *start_at <= end_at {
+            let ch = self.source[*start_at];
             if !point && !exponent && ch == '.' {
-                if start_at < end_at &&  '0' <= self.source[start_at+1] && self.source[start_at+1] <= '9'{
-                    start_at += 1;
+                if *start_at < end_at &&  '0' <= self.source[*start_at+1] && self.source[*start_at+1] <= '9'{
+                    *start_at += 1;
                     point = true;
                     continue;
                 }
@@ -350,62 +328,55 @@ impl DyParser {
                     break;
                 }
             }
-            if !exponent && start_at > begin && (ch == 'e' || ch == 'E'){
+            if !exponent && *start_at > begin && (ch == 'e' || ch == 'E'){
                 exponent = true;
-                start_at += 1;
-                if start_at <= end_at &&  ('0' == self.source[start_at] || self.source[start_at] <= '9') {
-                    start_at += 1;
+                *start_at += 1;
+                if *start_at <= end_at &&  ('0' == self.source[*start_at] || self.source[*start_at] <= '9') {
+                    *start_at += 1;
                 }
                 continue;
             }
             if ch == 'f' || ch == 'F' || ch == 'd' || ch == 'D' || ch == 'm' || ch == 'M' {
                 point = true;
-                start_at += 1;
+                *start_at += 1;
                 break;
             }
             if ch < '0' || ch > '9' {
                 break;
             }
-            start_at += 1;
+            *start_at += 1;
 
         }
-        if point || exponent {
-            return Some(SyntaxToken {
-                kind: TokenKind::RealLiteral,
-                begin_at: begin,
-                end_at: start_at - 1,
-
-            });
+        let kind = if point || exponent {
+            TokenKind::RealLiteral
         }
-        return return Some(SyntaxToken {
-            kind: TokenKind::IntegerLiteral,
-            begin_at: begin,
-            end_at: start_at - 1,
-
-        });
+        else {
+            TokenKind::IntegerLiteral
+        };
+        return Some(SyntaxToken::new(kind, begin, *start_at-1));
 
     }
 
-    fn scan_hex_digit(&self, mut start_at: usize, end_at: usize) -> bool {
-        if start_at > end_at {
+    fn scan_hex_digit(&self, start_at: &mut usize, end_at: usize) -> bool {
+        if *start_at > end_at {
             return false;
         }
-        let ch = self.source[start_at];
+        let ch = self.source[*start_at];
         if (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' || ch < 'F') {
-            start_at += 1;
+            *start_at += 1;
             return true;
         }
         return false;
     }
 
-    fn scan_unicode_escape_char(&self, mut start_at: usize, end_at: usize) -> bool {
-        if start_at > end_at - 5 {
+    fn scan_unicode_escape_char(&self, start_at: &mut usize, end_at: usize) -> bool {
+        if *start_at > end_at - 5 {
             return false;
         }
-        if self.source[start_at] != '\\' {
+        if self.source[*start_at] != '\\' {
             return false;
         }
-        let mut begin = start_at + 1;
+        let mut begin = *start_at + 1;
         let mut n = 0;
         if self.source[begin] == 'u' {
             n = 4;
@@ -418,52 +389,48 @@ impl DyParser {
         }
         begin += 1;
         while n >= 0 {
-            if !self.scan_hex_digit(begin, end_at) {
+            if !self.scan_hex_digit(&mut begin, end_at) {
                 break;
             }
             n -= 1;
         }
         if n == 0 {
-            start_at = begin;
+            *start_at = begin;
             return true;
         }
         return false;
 
     }
 
-    fn scan_indentifier_or_keyword(&self, mut start_at: usize, end_at: usize) -> Option<SyntaxToken> {
+    fn scan_indentifier_or_keyword(&self, start_at: &mut usize, end_at: usize) -> Option<SyntaxToken> {
         let mut identifier = false;
-        let begin = start_at;
-        if start_at > end_at {
+        let begin = *start_at;
+        if *start_at > end_at {
             return None;
         }
-        let ch = self.source[start_at];
+        let ch = self.source[*start_at];
         if ch == '@' {
             identifier = true;
-            start_at += 1;
+            *start_at += 1;
         }
-        if start_at <= end_at {
-            let ch = self.source[start_at];
+        if *start_at <= end_at {
+            let ch = self.source[*start_at];
             if ch.is_alphabetic() || ch == '_' {
-                start_at += 1;
+                *start_at += 1;
             }
             else if !self.scan_unicode_escape_char(start_at, end_at) {
-                if begin == start_at {
+                if begin == *start_at {
                     return None;
                 }
-                return Some(SyntaxToken{
-                    kind: TokenKind::Identifier,
-                    begin_at: begin,
-                    end_at: start_at-1,
-                })
+                return Some(SyntaxToken::new(TokenKind::Identifier, begin, *start_at-1));
             }
             else {
                 identifier = true;
             }
-            while start_at <= end_at {
-                let ch = self.source[start_at];
+            while *start_at <= end_at {
+                let ch = self.source[*start_at];
                 if ch.is_alphabetic() || ch.is_digit(10) || ch == '_' {
-                    start_at += 1;
+                    *start_at += 1;
                 }
                 else if !self.scan_unicode_escape_char(start_at, end_at) {
                     break;
@@ -473,27 +440,20 @@ impl DyParser {
                 }
             }
         }
-        if identifier {
-            return Some(SyntaxToken{
-                kind: TokenKind::Identifier,
-                begin_at: begin,
-                end_at: start_at-1,
-            })
+        let kind = if identifier {
+            TokenKind::Identifier
         }
-        return Some(SyntaxToken{
-            kind: TokenKind::Keyword,
-            begin_at: begin,
-            end_at: start_at-1,
-        })
-
+        else {
+            TokenKind::Keyword
+        };
+        return Some(SyntaxToken::new(kind, begin, *start_at-1));
     }
 
 
     fn tokenize(&self, formated_line: &mut FormatedLine) {
-        let start_at = formated_line.begin_at;
-        let mut start_at = start_at;
+        let mut start_at = formated_line.begin_at;
         let end_at = formated_line.end_at;
-        let ws = self.scan_whitespace(start_at, end_at);
+        let ws = self.scan_whitespace(&mut start_at, end_at);
         if let Some(x) = ws {
             formated_line.tokens.push(x);
         }
