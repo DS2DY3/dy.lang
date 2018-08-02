@@ -159,6 +159,10 @@ struct SyntaxToken {
     kind: TokenKind,
     begin_at: usize,
     end_at: usize,
+	
+    fn new(kind: TokenKind, begin_at: usize, end_at: usize) -> SyntaxToken {
+	    SyntaxToken{kind, begin_at, end_at}
+    }
 
 }
 
