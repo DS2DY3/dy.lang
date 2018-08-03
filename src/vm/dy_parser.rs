@@ -1,7 +1,7 @@
 use std::rc::Weak;
 use std::rc::Rc;
 use std::cell::RefCell;
-
+use std::iter::FromIterator;
 //pub enum BlockState {
 //	None,
 //	CommentBlock,
@@ -93,31 +93,10 @@ const BUILT_TYPES: [&'static str; 16] = ["bool", "byte", "char", "decimal", "dou
 		"string", "uint", "ulong", "ushort", "void"];
 
 const PREPROCESSOR_KEY_WORLDS: [&'static str; 12] = ["define", "elif", "else", "endif", "endregion", "error", "if", "line", "pragma", "region", "undef", "warning"];
-//
-//pub struct DyParser<'a> {
-//	pub lines: Vec<&'a str>,
-////	pub root_region: RegionTree<'a>,
-//}
-//
-//impl<'a> DyParser<'a> {
-//	pub fn parser(&self, code_content : & String) {
-//		self.lines = code_content.replace("\r\n", "\n").replace("\r", "\n").split("\n").collect();
-//	}
-//
-//	pub fn parse_line() {
-//
-//	}
-//
-//	pub fn lex_line() {
-//
-//	}
-//
-//	pub fn tokenize() {
-//
-//	}
-//}
+
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 enum TokenKind {
     Missing,
     Whitespace,
@@ -205,6 +184,36 @@ impl DyParser {
                 has_line_char = false;
             }
         }
+    }
+
+    fn get_string(&self, start_at: usize, end_at: usize) -> Option<String> {
+        if start_at < end_at && end_at < self.source.len() {
+            let it = &self.source[start_at..end_at+1];
+            return Some(String::from_iter(it));
+        }
+        return None;
+    }
+
+    fn is_keyword(&self, start_at: usize, end_at: usize) -> bool {
+        if let Some(x) = self.get_string(start_at, end_at) {
+            return KEY_WORDS.contains(&x.as_str());
+        }
+        return false;
+    }
+
+    fn is_keyword_or_built_type(&self, start_at: usize, end_at: usize) -> bool {
+        if let Some(x) = self.get_string(start_at, end_at) {
+            let word = x.as_str();
+            return KEY_WORDS.contains(&word) || BUILT_TYPES.contains(&word);
+        }
+        return false;
+    }
+
+    fn is_operator(&self, start_at: usize, end_at: usize) -> bool {
+        if let Some(x) = self.get_string(start_at, end_at) {
+            return OPERATORS.contains(&x.as_str());
+        }
+        return false;
     }
 
     fn scan_whitespace(&self, start_at: &mut usize, end_at: usize) -> Option<SyntaxToken> {
@@ -402,7 +411,17 @@ impl DyParser {
 
     }
 
-    fn scan_indentifier_or_keyword(&self, start_at: &mut usize, end_at: usize) -> Option<SyntaxToken> {
+    fn scan_identifier_or_keyword(&self, start_at: &mut usize, end_at: usize) -> Option<SyntaxToken> {
+        let mut token = self.scan_identifier_or_keyword_raw(start_at, end_at);
+        if let Some(ref mut st) = token {
+            if st.kind == TokenKind::Keyword && !self.is_keyword_or_built_type(st.begin_at, st.end_at) {
+                st.kind = TokenKind::Identifier;
+            }
+        }
+        return token;
+    }
+
+    fn scan_identifier_or_keyword_raw(&self, start_at: &mut usize, end_at: usize) -> Option<SyntaxToken> {
         let mut identifier = false;
         let begin = *start_at;
         if *start_at > end_at {
@@ -592,7 +611,7 @@ impl DyParser {
     }
 
     fn parse_pp_symbol(&self, formated_line: &mut FormatedLine, start_at: &mut usize) -> bool {
-        let word = self.scan_indentifier_or_keyword(start_at, formated_line.end_at);
+        let word = self.scan_identifier_or_keyword(start_at, formated_line.end_at);
         if let Some(mut x) = word {
             x.kind = TokenKind::PreprocessorSymbol;
             // let x = formated_line.tokens[-1];

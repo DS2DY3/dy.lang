@@ -1,10 +1,10 @@
 [package]
-name = "dy"
+name = "dyscript"
 version = "0.0.0"
 authors = ["ds2dy3"]
 
 [lib]
-name = "dy"
+name = "dyscript"
 path = "src/lib.rs"
 
 [[bin]]
