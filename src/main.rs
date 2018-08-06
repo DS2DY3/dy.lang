@@ -1,9 +1,9 @@
-extern crate dy;
+extern crate dyscript;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 
-use dy::vm::dy_parser::DyParser;
+use dyscript::vm::dy_parser::DyParser;
 
 fn main() {
 
@@ -21,7 +21,7 @@ fn main() {
 	f.read_to_string(&mut contents)
 		.expect("something went wrong reading the file");
 	let mut dy_parser = DyParser::new(contents);
-	dy_parser.format_line();
+	dy_parser.lex_line();
 
 	println!("With parser:\n{:#?}", dy_parser);
 	println!("Hello World, DY!");

@@ -2,81 +2,8 @@ use std::rc::Weak;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::iter::FromIterator;
-//pub enum BlockState {
-//	None,
-//	CommentBlock,
-//	StringBlock,
-//}
-//
-//pub enum RegionKind {
-//	None,
-//	Region,
-//	If,
-//	Elif,
-//	Else,
-//	LastActive,
-//	InactiveRegion,
-//	InactiveIf,
-//	InactiveElif,
-//	InactiveElse,
-//}
-//
-//pub struct RegionTree {
-//	kind: RegionKind,
-//	line: FormatedLine,
-//    parent: Option<Weak<RefCell<Box<RegionTree>>>>,
-//	children: Option<Vec<Rc<RefCell<Box<RegionTree>>>>>,
-//}
-//
-//
-//pub struct FormatedLine {
-//	block_state: BlockState,
-//    region_tree: Option<Rc<RegionTree>>,
-//    index: i32,
-//    tokens: Option<Vec<SyntaxToken>>,
-//}
-//
-//pub enum TokenKind {
-//	Missing,
-//	Whitespace,
-//	Comment,
-//	Preprocessor,
-//	PreprocessorArguments,
-//	PreprocessorSymbol,
-//	PreprocessorDirectiveExpected,
-//	PreprocessorCommentExpected,
-//	PreprocessorUnexpectedDirective,
-//	VerbatimStringLiteral,
-//
-//	LastWSToken, // Marker only
-//
-//	VerbatimStringBegin,
-//	BuiltInLiteral,
-//	CharLiteral,
-//	StringLiteral,
-//	IntegerLiteral,
-//	RealLiteral,
-//	Punctuator,
-//	Keyword,
-//	Identifier,
-//	ContextualKeyword,
-//	EOF,
-//}
-//
-//pub struct SyntaxToken {
-//	pub kind: TokenKind,
-//    pub text: str,
-//
-//}
-//
-//fn scan_char_literal(line: str, start: & mut i32) -> SyntaxToken {
-//
-//}
-//
-//fn scan_whitespace(line: str, start: & mut i32) -> SyntaxToken {
-//
-//}
-//
+use vm::dy_util::VecExtend;
+
 const KEY_WORDS: [&'static str; 58] = ["abstract", "as", "base", "break", "case", "catch", "checked", "class", "const", "continue",
 		"default", "delegate", "do", "else", "enum", "event", "explicit", "extern", "finally",
 		"fixed", "for", "foreach", "goto", "if", "implicit", "in", "interface", "internal", "is",
@@ -127,10 +54,11 @@ enum TokenKind {
 
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 enum BlockState {
     None,
-    CommentBlock,
-    StringBlock
+    Comment,
+    String,
 }
 
 #[derive(Debug)]
@@ -138,21 +66,88 @@ struct SyntaxToken {
     kind: TokenKind,
     begin_at: usize,
     end_at: usize,
-
+    block_state: BlockState,
 }
 
 impl SyntaxToken {
     fn new(kind: TokenKind, begin_at: usize, end_at: usize) -> SyntaxToken {
-        SyntaxToken{kind, begin_at, end_at}
+        SyntaxToken{kind, begin_at, end_at, block_state: BlockState::None }
     }
+}
+
+#[derive(Debug)]
+struct FormatedLine {
+    index: i32,
+    begin_at: usize,
+    end_at: usize,
+    tokens: Vec<SyntaxToken>,
+    block_state: BlockState,
+    region: Weak<Region>,
+}
+
+impl FormatedLine {
+    fn new(index: i32, begin_at: usize, end_at: usize) -> FormatedLine {
+        FormatedLine{
+            index,
+            begin_at,
+            end_at,
+            tokens: Vec::new(),
+            block_state: BlockState::None,
+            region: Weak::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+#[derive(PartialOrd, PartialEq)]
+pub enum RegionKind {
+    None,
+    Region,
+    If,
+    Elif,
+    Else,
+    LastActive,
+    InactiveRegion,
+    InactiveIf,
+    InactiveElif,
+    InactiveElse,
+}
+
+#[derive(Debug)]
+struct Region {
+    kind: RegionKind,
+    line_index: usize,
+    children: Vec<Region>,
+}
+
+impl Region {
+   fn new(kind: RegionKind, line_index: usize) -> Region {
+       return Region {
+           kind,
+           line_index,
+           children: Vec::new(),
+       };
+   }
+
+    fn new_rc(kind: RegionKind, line_index: usize) -> Rc<Region> {
+        return Rc::new(Region::new(kind, line_index));
+    }
+
+
+//    fn weak_ref(&self) -> Weak<Region> {
+//        let rc = Rc::new(self);
+//        return Rc::downgrade(&rc);
+//    }
 }
 
 #[derive(Debug)]
 pub struct DyParser {
     source: Vec<char>,
     formated_lines: Vec<FormatedLine>,
+    root_region: Rc<Region>,
 
 }
+
 
 impl DyParser {
 
@@ -161,10 +156,11 @@ impl DyParser {
         DyParser {
             source,
             formated_lines: Vec::new(),
+            root_region: Rc::new(Region::new(RegionKind::None, 0)),
         }
     }
 
-    pub fn format_line(&mut self) {
+    pub fn lex_line(&mut self) {
         let mut has_line_char = false;
         let mut pre_line_begin= 0;
         let mut formated_line_count = 0;
@@ -177,12 +173,25 @@ impl DyParser {
                     let pre_line_end = index - 1;
                     let mut formated_line = FormatedLine::new(formated_line_count, pre_line_begin, pre_line_end);
                     self.tokenize(&mut formated_line);
+                    formated_line.region = Rc::downgrade(&self.root_region);
                     self.formated_lines.push(formated_line);
                     formated_line_count += 1;
                     pre_line_begin = index;
                 }
                 has_line_char = false;
             }
+        }
+    }
+
+    fn tokenize(&self, formated_line: &mut FormatedLine) {
+        let mut start_at = formated_line.begin_at;
+        let end_at = formated_line.end_at;
+        let ws = self.scan_whitespace(&mut start_at, end_at);
+        if let Some(x) = ws {
+            formated_line.tokens.push(x);
+        }
+        if formated_line.block_state == BlockState::None && start_at <= end_at && self.source[start_at] == '#' {
+
         }
     }
 
@@ -614,13 +623,12 @@ impl DyParser {
         let word = self.scan_identifier_or_keyword(start_at, formated_line.end_at);
         if let Some(mut x) = word {
             x.kind = TokenKind::PreprocessorSymbol;
-            // let x = formated_line.tokens[-1];
+            let x = formated_line.tokens.put(x);
+            // formated_line.tokens.push(x);
             if self.source_equal(x.begin_at, x.end_at, "true") {
-                formated_line.tokens.push(x);
                 return true;
             }
             else if self.source_equal(x.begin_at, x.end_at, "false") {
-                formated_line.tokens.push(x);
                 return false;
             }
             // todo: vm compilationdefine
@@ -629,35 +637,6 @@ impl DyParser {
         return true;
     }
 
-
-    fn tokenize(&self, formated_line: &mut FormatedLine) {
-        let mut start_at = formated_line.begin_at;
-        let end_at = formated_line.end_at;
-        let ws = self.scan_whitespace(&mut start_at, end_at);
-        if let Some(x) = ws {
-            formated_line.tokens.push(x);
-        }
-
-    }
 }
 
-#[derive(Debug)]
-struct FormatedLine {
-    index: i32,
-    begin_at: usize,
-    end_at: usize,
-    tokens: Vec<SyntaxToken>,
-    block: BlockState,
-}
 
-impl FormatedLine {
-    fn new(index: i32, begin_at: usize, end_at: usize) -> FormatedLine {
-        FormatedLine{
-            index,
-            begin_at,
-            end_at,
-            tokens: Vec::new(),
-            block: BlockState::None,
-        }
-    }
-}
