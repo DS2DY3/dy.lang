@@ -55,6 +55,8 @@ enum TokenKind {
 
 #[derive(Debug)]
 #[derive(PartialEq)]
+#[repr(u8)]
+#[derive(Copy, Clone)]
 enum BlockState {
     None,
     Comment,
@@ -100,6 +102,7 @@ impl FormatedLine {
 
 #[derive(Debug)]
 #[derive(PartialOrd, PartialEq)]
+#[derive(Copy, Clone)]
 pub enum RegionKind {
     None,
     Region,
@@ -117,6 +120,7 @@ pub enum RegionKind {
 struct Region {
     kind: RegionKind,
     line_index: usize,
+    parent: Weak<Region>,
     children: Vec<Region>,
 }
 
@@ -126,6 +130,7 @@ impl Region {
            kind,
            line_index,
            children: Vec::new(),
+           parent: Weak::new(),
        };
    }
 
@@ -134,10 +139,6 @@ impl Region {
     }
 
 
-//    fn weak_ref(&self) -> Weak<Region> {
-//        let rc = Rc::new(self);
-//        return Rc::downgrade(&rc);
-//    }
 }
 
 #[derive(Debug)]
@@ -173,7 +174,16 @@ impl DyParser {
                     let pre_line_end = index - 1;
                     let mut formated_line = FormatedLine::new(formated_line_count, pre_line_begin, pre_line_end);
                     self.tokenize(&mut formated_line);
-                    formated_line.region = Rc::downgrade(&self.root_region);
+                    if formated_line_count == 0 {
+                        formated_line.region = Rc::downgrade(&self.root_region);
+                        formated_line.block_state = BlockState::None;
+                    }
+                    else {
+                        let pre_line = &self.formated_lines[self.formated_lines.len()-1];
+                        formated_line.region = Weak::clone(&pre_line.region);
+                        // formated_line.region = Rc::downgrade(&pre_line.region.upgrade().unwrap());
+                        formated_line.block_state = pre_line.block_state;
+                    }
                     self.formated_lines.push(formated_line);
                     formated_line_count += 1;
                     pre_line_begin = index;
@@ -501,6 +511,7 @@ impl DyParser {
     }
     // ------------------------------ help function end --------------------------------------------
 
+    // ---------------------------------- pp expression --------------------------------------------
     fn parse_pp_or_expression(&self, formated_line: &mut FormatedLine, start_at: &mut usize) -> bool {
         let end_at = formated_line.end_at;
         if *start_at > end_at {
@@ -631,12 +642,37 @@ impl DyParser {
             else if self.source_equal(x.begin_at, x.end_at, "false") {
                 return false;
             }
-            // todo: vm compilationdefine
+            // todo: vm compilation define
             return false;
         }
         return true;
     }
 
+    // ----------------------------------- region --------------------------------------------------
+    fn open_region(&mut self, formated_line: &mut FormatedLine, region_kind: RegionKind) {
+        let mut region_rc_op = formated_line.region.upgrade();
+        let mut parent_region = Weak::clone(&formated_line.region);
+        if let Some(ref mut region_rc) = region_rc_op {
+            let region_op = Rc::get_mut(region_rc);
+            if let Some(region) = region_op {
+                let kind = region.kind;
+                if kind == RegionKind::InactiveElif ||
+                    kind == RegionKind::Elif ||
+                    kind == RegionKind::Else ||
+                    kind == RegionKind::InactiveElse {
+                    parent_region = Weak::clone(&region.parent)
+                }
+            }
+        }
+    }
+
+    fn close_region(formated_line: &mut FormatedLine) {
+        let region_rc = formated_line.region.upgrade();
+        match region_rc {
+            None => formated_line.region = Weak::new(),
+            Some(region) => formated_line.region = Weak::clone(&region.parent),
+        }
+    }
 }
 
 
