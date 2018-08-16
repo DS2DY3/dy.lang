@@ -79,7 +79,7 @@ impl SyntaxToken {
 
 #[derive(Debug)]
 struct FormatedLine {
-    index: i32,
+    index: usize,
     begin_at: usize,
     end_at: usize,
     tokens: Vec<SyntaxToken>,
@@ -88,7 +88,7 @@ struct FormatedLine {
 }
 
 impl FormatedLine {
-    fn new(index: i32, begin_at: usize, end_at: usize) -> FormatedLine {
+    fn new(index: usize, begin_at: usize, end_at: usize) -> FormatedLine {
         FormatedLine{
             index,
             begin_at,
@@ -133,6 +133,11 @@ impl Region {
            parent: Weak::new(),
        };
    }
+
+    fn make_weak(&self) -> Weak<Region> {
+        let self_rc = Rc::new(*self);
+        Rc::downgrade(&self_rc)
+    }
 
     fn new_rc(kind: RegionKind, line_index: usize) -> Rc<Region> {
         return Rc::new(Region::new(kind, line_index));
@@ -650,20 +655,25 @@ impl DyParser {
 
     // ----------------------------------- region --------------------------------------------------
     fn open_region(&mut self, formated_line: &mut FormatedLine, region_kind: RegionKind) {
-        let mut region_rc_op = formated_line.region.upgrade();
+        // todo: 同一行不能有两个region
         let mut parent_region = Weak::clone(&formated_line.region);
-        if let Some(ref mut region_rc) = region_rc_op {
-            let region_op = Rc::get_mut(region_rc);
-            if let Some(region) = region_op {
-                let kind = region.kind;
-                if kind == RegionKind::InactiveElif ||
-                    kind == RegionKind::Elif ||
-                    kind == RegionKind::Else ||
-                    kind == RegionKind::InactiveElse {
+        if region_kind == RegionKind::InactiveElif ||
+            region_kind == RegionKind::Elif ||
+            region_kind == RegionKind::Else ||
+            region_kind == RegionKind::InactiveElse {
+            let mut region_rc_op = formated_line.region.upgrade();
+            if let Some(ref mut region_rc) = region_rc_op {
+                let region_op = Rc::get_mut(region_rc);
+                if let Some(region) = region_op {
                     parent_region = Weak::clone(&region.parent)
                 }
             }
+            // todo error
         }
+        let mut parent_rc = parent_region.upgrade().unwrap();
+        let parent = Rc::get_mut(&mut parent_rc).unwrap();
+        let region = Region::new(region_kind, formated_line.index);
+        parent.children.push(region);
     }
 
     fn close_region(formated_line: &mut FormatedLine) {

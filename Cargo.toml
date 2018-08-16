@@ -5,7 +5,7 @@ keywords = ["script language", "typed", "dynamic"]
 authors = ["ds2dy3"]
 
 [lib]
-name = "dyscript"
+name = "dy"
 path = "src/lib.rs"
 
 [[bin]]

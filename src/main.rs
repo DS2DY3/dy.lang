@@ -1,9 +1,9 @@
-extern crate dyscript;
+extern crate dy;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 
-use dyscript::vm::dy_parser::DyParser;
+use dy::vm::dy_parser::DyParser;
 
 fn main() {
 

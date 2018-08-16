@@ -29,9 +29,13 @@ impl<T> VecExtend for Vec<T> {
 //    type ItemType = T;
 //    fn get_mut(&mut self) -> Option<&mut T> {
 //        let rc_op = self.upgrade();
-//        match rc_op {
-//            None => None,
-//            Some(ref mut rc_obj) => Rc::get_mut(&mut rc_obj)
+//        if let Some(ref mut rc_obj) = rc_op {
+//            return Rc::get_mut(&mut rc_obj);
 //        }
+//        return None;
+////        match rc_op {
+////            None => None,
+////            Some(ref mut rc_obj) => Rc::get_mut(&mut rc_obj)
+////        }
 //    }
 //}
