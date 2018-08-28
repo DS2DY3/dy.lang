@@ -134,10 +134,7 @@ impl Region {
        };
    }
 
-    fn make_weak(&self) -> Weak<Region> {
-        let self_rc = Rc::new(*self);
-        Rc::downgrade(&self_rc)
-    }
+
 
     fn new_rc(kind: RegionKind, line_index: usize) -> Rc<Region> {
         return Rc::new(Region::new(kind, line_index));

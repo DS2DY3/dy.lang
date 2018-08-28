@@ -1,43 +1,22 @@
 use std::ops::{Index, IndexMut};
+use std::rc::Rc;
+use std::rc::Weak;
+use std::cell::RefCell;
 
-
-pub struct DyNode<T> {
-    data: T,
-    idx: usize,
-    parent: Option<usize>,
-    children: Vec<usize>,
-}
 
 pub struct DyTree<T> {
-    nodes: Vec<DyNode<T>>,
-    root: usize,
+    nodes: Vec<DyNode<T>>
 }
 
-
-impl<T> Index<NodeId> for DyTree<T> {
-    type Output = DyNode<T>;
-
-    fn index(&self, index: usize) -> &DyNode<T> {
-        &self.nodes[index]
-    }
+pub struct DyNode<T> {
+    pub data: T,
+    pub index: usize,
 }
 
-impl<T> IndexMut<NodeId> for DyTree<T> {
-    fn index_mut(&mut self, index: usize) -> &mut DyNode<T> {
-        &mut self.nodes[index]
-    }
-}
-
-impl<T> DyTree<T> {
-
-    
-    pub fn get(&self, index: usize) -> Option<&DyNode<T>> {
-        self.nodes.get(index)
-    }
-
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut DyNode<T>> {
-        self.nodes.get_mut(index)
-    }
-
-
+pub struct DyRef<T> {
+    index: usize,
+    parent: Weak<DyRef<T>>,
+    first_child: Rc<DyRef<T>>,
+    next_sibling: Rc<DyRef<T>>,
+    tree: Weak<DyNodeTree<T>>,
 }
