@@ -6,6 +6,10 @@ Just do it yourself, and make it difference!
 
 All is garbage!
 
+1.没有运行时检查：运行高效
+2.编译器检查：开发高效
+3.可编程：定制化
+
 
 ## Inspired by
 

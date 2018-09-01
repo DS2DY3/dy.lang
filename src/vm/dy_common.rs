@@ -1,22 +1,30 @@
-use std::ops::{Index, IndexMut};
-use std::rc::Rc;
-use std::rc::Weak;
-use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+use std::cell::{RefCell, Ref, RefMut};
+use std::fmt;
 
 
-pub struct DyTree<T> {
-    nodes: Vec<DyNode<T>>
-}
+type WeakRef<T> = Weak<RefCell<DyNode<T>>>;
+type RcRef<T> = Rc<RefCell<DyNode<T>>>;
 
 pub struct DyNode<T> {
-    pub data: T,
-    pub index: usize,
+    data: T,
+    parent: WeakRef<T>,
+    first_child: RcRef<T>,
+    next_sibling: RcRef<T>,
+    root: WeakRef<T>,
 }
 
-pub struct DyRef<T> {
-    index: usize,
-    parent: Weak<DyRef<T>>,
-    first_child: Rc<DyRef<T>>,
-    next_sibling: Rc<DyRef<T>>,
-    tree: Weak<DyNodeTree<T>>,
+pub struct DyRef<T> (RcRef<T>);
+
+impl<T> Clone for DyRef<T> {
+    fn clone(&self) -> Self {
+        DyRef(Rc::clone(&self.0))
+    }
 }
+
+impl<T> PartialEq for DyRef<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
