@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 use dy::vm::dy_parser::DyParser;
+use dy::vm::dy_common::DyRef;
 
 fn main() {
 
@@ -25,4 +26,9 @@ fn main() {
 
 	println!("With parser:\n{:#?}", dy_parser);
 	println!("Hello World, DY!");
+
+	// ---------------  test -------------------
+	let a1 = DyRef::new(11);
+	let a2 = DyRef::new(12);
+	println!("----->{}, {:?}", a1, a1.parent());
 }
