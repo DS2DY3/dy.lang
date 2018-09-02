@@ -138,6 +138,8 @@ impl<T> DyRef<T> {
     // 插入操作
 
     pub fn append(&self, child: &DyRef<T>) {
+        assert!(*self != *child, "can't append to self");
+        let mut mut_borrow = self.0.borrow_mut();
 
     }
 
@@ -150,6 +152,26 @@ impl<T> DyRef<T> {
     }
 
     pub fn insert_before(&self, sibling: &DyRef<T>) {
+
+    }
+
+    // remove from parent and reconnect sibling
+    pub fn detach(&self) {
+        let mut mut_borrow = self.0.borrow_mut();
+        let parent_rc_op = mut_borrow.parent.upgrade();
+        let next_sibling_rc_op = mut_borrow.next_sibling;
+        let pre_sibling_rc_op = mut_borrow.pre_sibling.upgrade();
+
+        if let Some(ref parent_rc) = parent_rc_op {
+
+        }
+        if let Some(ref next_sibling_rc ) = next_sibling_rc_op {
+
+            if let Some(ref pre_sibling_rc) = pre_sibling_rc_op {
+                
+            }
+
+        }
 
     }
 
