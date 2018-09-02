@@ -30,5 +30,10 @@ fn main() {
 	// ---------------  test -------------------
 	let a1 = DyRef::new(11);
 	let a2 = DyRef::new(12);
-	println!("----->{}, {:?}", a1, a1.parent());
+	{
+		let mut b1 = a1.borrow_mut();
+		*b1 = 10;
+	}
+
+	println!("----->{}, {:?}, {:?}", a1, a1.parent(), a1.root());
 }
