@@ -14,10 +14,9 @@ pub struct DyNode<T> {
     data: T,
     parent: WeakRef<T>,
     first_child: Option<RcRef<T>>,
-    last_child: WeakRef<T>,
+    last_child: WeakRef<T>,  // remove?
     next_sibling: Option<RcRef<T>>,
     pre_sibling: WeakRef<T>,
-    root: WeakRef<T>,
 }
 
 impl<T> Deref for DyNode<T> {
@@ -111,9 +110,9 @@ impl<T> DyRef<T> {
     // 访问节点
 
     pub fn root(&self) -> DyRef<T> {
-        match self.0.borrow().root.upgrade() {
+        match self.0.borrow().parent.upgrade() {
             None => self.clone(),
-            Some(root) => DyRef(root),
+            Some(ref parent) => DyRef(Rc::clone(parent).root(),
         }
     }
 
@@ -176,27 +175,63 @@ impl<T> DyRef<T> {
         child.detach();
         let mut self_node = self.0.borrow_mut();
         let mut last_child_rc_op = self_node.last_child.upgrade()
-        let mut first_child_rc_op = self_node.first_child
-        if let Some(ref mut first_child_rc) = first_child_rc_op {
-
+        let mut first_child_rc_op = self_node.first_child;
+        if let Some(ref mut last_child_rc) = last_child_rc_op {
+            last_child_rc.next_sibling = Some(Rc::clone(&child.0));
+            child.pre_sibling = Rc::downgrade(last_child_rc);
         }
-
+        else {
+            self_node.first_child = Some(Rc::clone(&child.0));
+        }
+        self_node.last_child = Rc::downgrade(&child.0);
     }
 
     pub fn prepend(&self, child: &DyRef<T>) {
         assert!(*self != *child, "can't prepend to self");
+        child.detach();
+        let mut self_node = self.0.borrow_mut();
+        let mut last_child_rc_op = self_node.last_child.upgrade()
+        let mut first_child_rc_op = self_node.first_child;
+        if let Some(ref mut first_child_rc) = first_child_rc_op {
+            first_child_rc.pre_sibling = Rc::downgrade(&child.0);
+            child.next_sibling = Rc::clone(first_child_rc);
+        }
+        else {
+            self_node.last_child = Rc::downgrade(&child.0);
+        }
+        self_node.first_child = Some(Rc::clone(&child.0));
     }
 
     pub fn insert_after(&self, sibling: &DyRef<T>) {
-
+        assert!(*self != *sibling, "can't insert to self");
+        sibling.detach();
+        let mut self_node = self.0.borrow_mut();
+        let mut parent_rc_op = self_node.parent.upgrade();
+        if Some(ref mut parent_rc) = parent_rc_op {
+            if parent_rc.last_child == self_node {
+                parent_rc.last_child = Rc::downgrade(&sibling.0)
+            }
+        }
+        self_node.next_sibling = Rc::clone(&sibling.0);
+        sibling.0.pre_sibling = Rc::downgrade(&self_node)
     }
 
     pub fn insert_before(&self, sibling: &DyRef<T>) {
-
+        assert!(*self != *sibling, "can't insert to self");
+        sibling.detach();
+        let mut self_node = self.0.borrow_mut();
+        let mut parent_rc_op = self_node.parent.upgrade();
+        if Some(ref mut parent_rc) = parent_rc_op {
+            if parent_rc.first_child == self_node {
+                parent_rc.first_child = Rc::clone(&sibling.0)
+            }
+        }
+        self_node.pre_sibling = Rc::downgrade(&sibling.0);
+        sibling.0.next_sibling = Rc::clone(&self_node)
     }
 
     // remove from parent and reconnect sibling
-    pub fn detach(&mut self) {
+    pub fn detach(&self) {
         let mut self_node = self.0.borrow_mut();
         let mut parent_rc_op = self_node.parent.upgrade();
         self_node.parent = None;
@@ -209,7 +244,7 @@ impl<T> DyRef<T> {
         if let Some(ref mut parent_rc) = parent_rc_op {
             if next_sibling_rc_op.is_none() {
                 if let Some(ref pre_sibling_rc) = pre_sibling_rc_op {
-                    parent_rc.last_child = Rc::downgrade(pre_sibling_rc);
+                    parent_rc.last_child = Some(Rc::downgrade(pre_sibling_rc));
                 }
                 else {
                     parent_rc.last_child = Weak::new();
@@ -217,7 +252,7 @@ impl<T> DyRef<T> {
             }
             if pre_sibling_rc_op.is_none() {
                 if let Some(ref next_sibling_rc) = next_sibling_rc_op {
-                    parent_rc.first_child = Rc::clone(next_sibling_rc);
+                    parent_rc.first_child = Some(Rc::clone(next_sibling_rc));
                 }
                 else {
                     parent_rc.first_child = None;
@@ -228,7 +263,7 @@ impl<T> DyRef<T> {
         if let Some(ref mut next_sibling_rc ) = next_sibling_rc_op {
             if let Some(ref mut pre_sibling_rc) = pre_sibling_rc_op {
                 next_sibling_rc.pre_sibling = Rc::downgrade(pre_sibling_rc);
-                pre_sibling_rc.next_sibling = Rc::clone(next_sibling_rc);
+                pre_sibling_rc.next_sibling = Some(Rc::clone(next_sibling_rc));
             }
             else {
                 next_sibling_rc.pre_sibling = Weak::new();
