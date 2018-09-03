@@ -4,6 +4,8 @@ use std::fmt;
 use std::ops::{Deref, DerefMut};
 //use std::borrow::{Borrow, BorrowMut};
 
+// copy from: https://github.com/RazrFalcon/rctree/
+
 
 type WeakRef<T> = Weak<RefCell<DyNode<T>>>;
 type RcRef<T> = Rc<RefCell<DyNode<T>>>;
@@ -82,6 +84,30 @@ impl<T> DyRef<T> {
         RefMut::map(self.0.borrow_mut(), |v| &mut v.data)
     }
 
+    // copy link
+    pub fn deep_copy(&self) -> DyRef<T> where T: Clone{
+        let mut root = self.make_copy();
+        DyRef::_deep_copy(&mut node, self);
+        root
+    }
+
+    fn _deep_copy(parent: &mut DyRef<T>, node: &DyRef<T>) where T: clone {
+        for mut child in node.children() {
+            let mut new_node = child.make_copy();
+            parent.append(new_node.clone());
+
+            if child.has_children() {
+                Node::_deep_copy(&mut new_node, &child);
+            }
+        }
+    }
+
+    // only copy data
+    pub fn make_copy(&self) -> DyRef<T> where T: Clone {
+        DyRef::new(self.borrow().clone())
+    }
+
+
     // 访问节点
 
     pub fn root(&self) -> DyRef<T> {
@@ -135,16 +161,30 @@ impl<T> DyRef<T> {
         self.first_child().is_some()
     }
 
+    pub fn contains(&self, child: &DyRef<T>) -> bool {
+        false
+    }
+
+    pub fn includes(&self, child: &DyRef<T>) -> bool {
+        false
+    }
+
     // 插入操作
 
     pub fn append(&self, child: &DyRef<T>) {
         assert!(*self != *child, "can't append to self");
-        let mut mut_borrow = self.0.borrow_mut();
+        child.detach();
+        let mut self_node = self.0.borrow_mut();
+        let mut last_child_rc_op = self_node.last_child.upgrade()
+        let mut first_child_rc_op = self_node.first_child
+        if let Some(ref mut first_child_rc) = first_child_rc_op {
+
+        }
 
     }
 
     pub fn prepend(&self, child: &DyRef<T>) {
-
+        assert!(*self != *child, "can't prepend to self");
     }
 
     pub fn insert_after(&self, sibling: &DyRef<T>) {
@@ -156,21 +196,46 @@ impl<T> DyRef<T> {
     }
 
     // remove from parent and reconnect sibling
-    pub fn detach(&self) {
-        let mut mut_borrow = self.0.borrow_mut();
-        let parent_rc_op = mut_borrow.parent.upgrade();
-        let next_sibling_rc_op = mut_borrow.next_sibling;
-        let pre_sibling_rc_op = mut_borrow.pre_sibling.upgrade();
+    pub fn detach(&mut self) {
+        let mut self_node = self.0.borrow_mut();
+        let mut parent_rc_op = self_node.parent.upgrade();
+        self_node.parent = None;
+        let mut next_sibling_rc_op = self_node.next_sibling;
+        self_node.next_sibling = None;
+        let mut pre_sibling_rc_op = self_node.pre_sibling.upgrade();
+        self_node.pre_sibling = None;
 
-        if let Some(ref parent_rc) = parent_rc_op {
-
-        }
-        if let Some(ref next_sibling_rc ) = next_sibling_rc_op {
-
-            if let Some(ref pre_sibling_rc) = pre_sibling_rc_op {
-                
+        // remove frome parent
+        if let Some(ref mut parent_rc) = parent_rc_op {
+            if next_sibling_rc_op.is_none() {
+                if let Some(ref pre_sibling_rc) = pre_sibling_rc_op {
+                    parent_rc.last_child = Rc::downgrade(pre_sibling_rc);
+                }
+                else {
+                    parent_rc.last_child = Weak::new();
+                }
             }
-
+            if pre_sibling_rc_op.is_none() {
+                if let Some(ref next_sibling_rc) = next_sibling_rc_op {
+                    parent_rc.first_child = Rc::clone(next_sibling_rc);
+                }
+                else {
+                    parent_rc.first_child = None;
+                }
+            }
+        }
+        // reconnect sibling
+        if let Some(ref mut next_sibling_rc ) = next_sibling_rc_op {
+            if let Some(ref mut pre_sibling_rc) = pre_sibling_rc_op {
+                next_sibling_rc.pre_sibling = Rc::downgrade(pre_sibling_rc);
+                pre_sibling_rc.next_sibling = Rc::clone(next_sibling_rc);
+            }
+            else {
+                next_sibling_rc.pre_sibling = Weak::new();
+            }
+        }
+        else if let Some(ref mut pre_sibling_rc) = pre_sibling_rc_op {
+            pre_sibling_rc.next_sibling = None;
         }
 
     }
