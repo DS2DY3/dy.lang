@@ -174,11 +174,11 @@ impl<T> DyRef<T> {
         child.detach();
         let mut self_node = self.0.borrow_mut();
         let mut child_borrow = child.0.borrow_mut();
-        let mut last_child_rc_op = self_node.last_child.upgrade();
-        let mut first_child_rc_op = self_node.first_child;
-        if let Some(ref mut last_child_rc) = last_child_rc_op {
+        // let mut last_child_rc_op = self_node.last_child.upgrade();
+        if self_node.last_child.upgrade().is_some() {
+            let last_child_rc = self_node.last_child.upgrade().unwrap();
             last_child_rc.borrow_mut().next_sibling = Some(Rc::clone(&child.0));
-            child_borrow.pre_sibling = Rc::downgrade(last_child_rc);
+            child_borrow.pre_sibling = Rc::downgrade(&last_child_rc);
         }
         else {
             self_node.first_child = Some(Rc::clone(&child.0));
@@ -196,9 +196,20 @@ impl<T> DyRef<T> {
         child.detach();
         let mut self_node = self.0.borrow_mut();
         let mut child_borrow = child.0.borrow_mut();
-        let mut last_child_rc_op = self_node.last_child.upgrade();
-        let mut first_child_rc_op = self_node.first_child;
+        // 第1版本
+        // let mut first_child_rc_op = self_node.first_child;
+        //if let Some(ref mut first_child_rc) = first_child_rc_op {
+        // 第2版本
+        // if let Some(ref mut first_child_rc) = self_node.first_child.as_mut() {
+        
+        // 第3版本
+        let first_child_rc_op = &mut self_node.first_child;
         if let Some(ref mut first_child_rc) = first_child_rc_op {
+
+        // 第4版本
+        // 总结：自身是引用成员变量也要借用访问
+        // if self_node.first_child.is_some() {
+        //     let first_child_rc = self_node.first_child.as_mut().unwrap();
             first_child_rc.borrow_mut().pre_sibling = Rc::downgrade(&child.0);
             child_borrow.next_sibling = Some(Rc::clone(first_child_rc));
         }
@@ -206,9 +217,11 @@ impl<T> DyRef<T> {
             self_node.last_child = Rc::downgrade(&child.0);
         }
         self_node.first_child = Some(Rc::clone(&child.0));
-        let parent_rc_op = self_node.parent.upgrade();
-        if let Some(ref parent_rc) = parent_rc_op {
-            child_borrow.parent = Rc::downgrade(parent_rc)
+        {
+            let parent_rc_op = &mut self_node.parent.upgrade();
+            if let Some(ref parent_rc) = parent_rc_op {
+                child_borrow.parent = Rc::downgrade(parent_rc)
+            }
         }
     }
 
