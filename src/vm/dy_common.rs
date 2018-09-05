@@ -2,6 +2,7 @@ use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
+use std::ops::Drop;
 //use std::borrow::{Borrow, BorrowMut};
 
 // copy from: https://github.com/RazrFalcon/rctree/
@@ -44,6 +45,12 @@ impl<T> Clone for DyRef<T> {
 impl<T> PartialEq for DyRef<T> {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl<T> Drop for DyRef<T> {
+    fn drop(&mut self) {
+        self.detach();
     }
 }
 
@@ -297,6 +304,92 @@ impl<T> DyRef<T> {
     }
 
     // 迭代器
+    pub fn acestors(&self) -> Ancestors<T> {
+        Ancestors(Some(self.clone()))
+    }
+
+    // Returns an iterator of nodes to this node and the siblings before it.
+    ///
+    /// Includes the current node.
+    pub fn preceding_siblings(&self) -> PrecedingSiblings<T> {
+        PrecedingSiblings(Some(self.clone()))
+    }
+
+    /// Returns an iterator of nodes to this node and the siblings after it.
+    ///
+    /// Includes the current node.
+    pub fn following_siblings(&self) -> FollowingSiblings<T> {
+        FollowingSiblings(Some(self.clone()))
+    }
+
+    /// Returns an iterator of nodes to this node's children.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently mutability borrowed.
+    pub fn children(&self) -> Children<T> {
+        Children(self.first_child())
+    }
+
+    /// Returns an iterator of nodes to this node's children, in reverse order.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is currently mutability borrowed.
+    pub fn reverse_children(&self) -> ReverseChildren<T> {
+        ReverseChildren(self.last_child())
+    }
 
 }
+
+pub mod iterator {
+    pub use super::Ancestors;
+    pub use super::PrecedingSiblings;
+    pub use super::FollowingSiblings;
+    pub use super::Children;
+    pub use super::ReverseChildren;
+}
+
+macro_rules! impl_node_iterator {
+    ($name: ident, $next: expr) => {
+        impl<T> Iterator for $name<T> {
+            type Item = DyRef<T>;
+
+            /// # Panics
+            ///
+            /// Panics if the node about to be yielded is currently mutability borrowed.
+            fn next(&mut self) -> Option<Self::Item> {
+                match self.0.take() {
+                    Some(node) => {
+                        self.0 = $next(&node);
+                        Some(node)
+                    }
+                    None => None
+                }
+            }
+        }
+    }
+}
+
+/// An iterator of nodes to the ancestors a given node.
+pub struct Ancestors<T>(Option<DyRef<T>>);
+impl_node_iterator!(Ancestors, |node: &DyRef<T>| node.parent());
+
+/// An iterator of nodes to the siblings before a given node.
+pub struct PrecedingSiblings<T>(Option<DyRef<T>>);
+impl_node_iterator!(PrecedingSiblings, |node: &DyRef<T>| node.pre_sibling());
+
+/// An iterator of nodes to the siblings after a given node.
+pub struct FollowingSiblings<T>(Option<DyRef<T>>);
+impl_node_iterator!(FollowingSiblings, |node: &DyRef<T>| node.next_sibling());
+
+/// An iterator of nodes to the children of a given node.
+pub struct Children<T>(Option<DyRef<T>>);
+impl_node_iterator!(Children, |node: &DyRef<T>| node.next_sibling());
+
+/// An iterator of nodes to the children of a given node, in reverse order.
+pub struct ReverseChildren<T>(Option<DyRef<T>>);
+impl_node_iterator!(ReverseChildren, |node: &DyRef<T>| node.pre_sibling());
+
+
 
