@@ -90,22 +90,22 @@ impl<T> DyRef<T> {
     }
 
     // copy link
-//    pub fn deep_copy(&self) -> DyRef<T> where T: Clone{
-//        let mut root = self.make_copy();
-//        DyRef::_deep_copy(&mut node, self);
-//        root
-//    }
+    pub fn deep_copy(&self) -> DyRef<T> where T: Clone{
+        let mut root = self.make_copy();
+        DyRef::_deep_copy(&mut root, self);
+        root
+    }
 
-//    fn _deep_copy(parent: &mut DyRef<T>, node: &DyRef<T>) where T: clone {
-//        for mut child in node.children() {
-//            let mut new_node = child.make_copy();
-//            parent.append(new_node.clone());
-//
-//            if child.has_children() {
-//                Node::_deep_copy(&mut new_node, &child);
-//            }
-//        }
-//    }
+    fn _deep_copy(parent: &mut DyRef<T>, node: &DyRef<T>) where T: Clone {
+        for mut child in node.children() {
+            let mut new_node = child.make_copy();
+            parent.append(&new_node.clone());
+
+            if child.has_children() {
+                DyRef::_deep_copy(&mut new_node, &child);
+            }
+        }
+    }
 
     // only copy data
     pub fn make_copy(&self) -> DyRef<T> where T: Clone {
