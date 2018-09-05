@@ -203,13 +203,13 @@ impl<T> DyRef<T> {
         // if let Some(ref mut first_child_rc) = self_node.first_child.as_mut() {
         
         // 第3版本
-        let first_child_rc_op = &mut self_node.first_child;
-        if let Some(ref mut first_child_rc) = first_child_rc_op {
+        // let first_child_rc_op = &mut self_node.first_child;
+        // if let Some(ref mut first_child_rc) = first_child_rc_op {
 
         // 第4版本
         // 总结：自身是引用成员变量也要借用访问
-        // if self_node.first_child.is_some() {
-        //     let first_child_rc = self_node.first_child.as_mut().unwrap();
+        if self_node.first_child.is_some() {
+            let first_child_rc = self_node.first_child.as_mut().unwrap();
             first_child_rc.borrow_mut().pre_sibling = Rc::downgrade(&child.0);
             child_borrow.next_sibling = Some(Rc::clone(first_child_rc));
         }
@@ -217,12 +217,7 @@ impl<T> DyRef<T> {
             self_node.last_child = Rc::downgrade(&child.0);
         }
         self_node.first_child = Some(Rc::clone(&child.0));
-        {
-            let parent_rc_op = &mut self_node.parent.upgrade();
-            if let Some(ref parent_rc) = parent_rc_op {
-                child_borrow.parent = Rc::downgrade(parent_rc)
-            }
-        }
+        child_borrow.parent = self_node.parent.clone();
     }
 
     pub fn insert_after(&self, sibling: &DyRef<T>) {
@@ -247,7 +242,7 @@ impl<T> DyRef<T> {
         let mut parent_rc_op = self_node.parent.upgrade();
         if let Some(ref mut parent_rc) = parent_rc_op {
             let mut parent_mut = parent_rc.borrow_mut();
-            if Rc::ptr_eq(&parent_mut.first_child.unwrap(), &self.0) {
+            if Rc::ptr_eq(parent_mut.first_child.as_mut().unwrap(), &self.0) {
                 parent_mut.first_child = Some(Rc::clone(&sibling.0));
             }
         }
@@ -260,23 +255,21 @@ impl<T> DyRef<T> {
         let mut self_node = self.0.borrow_mut();
         let mut parent_rc_op = self_node.parent.upgrade();
         self_node.parent = Weak::new();
-        let mut next_sibling_rc_op = self_node.next_sibling;
-        self_node.next_sibling = None;
-        let mut pre_sibling_rc_op = self_node.pre_sibling.upgrade();
-        self_node.pre_sibling = Weak::new();
+        let mut pre_sibling_rc_op = &mut self_node.pre_sibling.upgrade();
 
         // remove frome parent
         if let Some(ref mut parent_rc) = parent_rc_op {
-            if next_sibling_rc_op.is_none() {
-                if let Some(ref pre_sibling_rc) = pre_sibling_rc_op {
-                    parent_rc.borrow_mut().last_child = Rc::downgrade(pre_sibling_rc);
+            if self_node.next_sibling.is_none() {
+                if pre_sibling_rc_op.is_some() {
+                    parent_rc.borrow_mut().last_child = self_node.pre_sibling.clone();
                 }
                 else {
                     parent_rc.borrow_mut().last_child = Weak::new();
                 }
             }
             if pre_sibling_rc_op.is_none() {
-                if let Some(ref next_sibling_rc) = next_sibling_rc_op {
+                if self_node.next_sibling.is_some() {
+                    let next_sibling_rc = self_node.next_sibling.as_mut().unwrap();
                     parent_rc.borrow_mut().first_child = Some(Rc::clone(next_sibling_rc));
                 }
                 else {
@@ -285,7 +278,8 @@ impl<T> DyRef<T> {
             }
         }
         // reconnect sibling
-        if let Some(ref mut next_sibling_rc ) = next_sibling_rc_op {
+        if self_node.next_sibling.is_some() {
+            let next_sibling_rc = self_node.next_sibling.as_mut().unwrap();
             if let Some(ref mut pre_sibling_rc) = pre_sibling_rc_op {
                 next_sibling_rc.borrow_mut().pre_sibling = Rc::downgrade(pre_sibling_rc);
                 pre_sibling_rc.borrow_mut().next_sibling = Some(Rc::clone(next_sibling_rc));
@@ -298,6 +292,8 @@ impl<T> DyRef<T> {
             pre_sibling_rc.borrow_mut().next_sibling = None;
         }
 
+        self_node.pre_sibling = Weak::new();
+        self_node.next_sibling = None;
     }
 
     // 迭代器
