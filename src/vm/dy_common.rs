@@ -2,11 +2,11 @@ use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
-use std::ops::Drop;
+//use std::ops::Drop;
 //use std::borrow::{Borrow, BorrowMut};
 
 // copy from: https://github.com/RazrFalcon/rctree/
-
+// DyRef 最多有一个parent节点
 
 type WeakRef<T> = Weak<RefCell<DyNode<T>>>;
 type RcRef<T> = Rc<RefCell<DyNode<T>>>;
@@ -48,11 +48,12 @@ impl<T> PartialEq for DyRef<T> {
     }
 }
 
-impl<T> Drop for DyRef<T> {
-    fn drop(&mut self) {
-        self.detach();
-    }
-}
+// impl<T> Drop for DyRef<T> {
+//     fn drop(&mut self) {
+//         // todo:计算引用，然后删除节点，删除节点
+//         // self.detach();
+//     }
+// }
 
 impl<T: fmt::Debug> fmt::Debug for DyRef<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -339,6 +340,48 @@ impl<T> DyRef<T> {
     pub fn reverse_children(&self) -> ReverseChildren<T> {
         ReverseChildren(self.last_child())
     }
+
+    // index:索引
+    pub fn children_count(&self) -> usize {
+
+    }
+
+    pub fn child_at(&self, index: usize) -> DyRef<T> {
+
+    }
+
+    pub fn ancestors_count(&self) -> usize {
+
+    }
+
+    pub fn ancestor_at(&self, index: usize) -> DyRef<T> {
+
+    }
+
+    pub fn descendants_count(&self) -> usize {
+
+    }
+
+    pub fn descendant_at(&self, index: usize) -> DyRef<T> {
+
+    }
+
+    pub fn preceding_siblings_count(&self) -> usize {
+
+    }
+
+    pub fn preceding_sibling_at(&self, index: usize) -> DyRef<T> {
+
+    }
+
+    pub fn following_siblings_count(&self) -> usize {
+
+    }
+
+    pub fn following_sibling_at(&self, index: usize) -> DyRef<T> {
+
+    }
+
 
 }
 
