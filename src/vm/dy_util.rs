@@ -20,22 +20,29 @@ impl<T> VecExtend for Vec<T> {
     }
 }
 
-//pub trait WeakExtend {
-//    type ItemType;
-//    fn get_mut(&mut self) -> Option<&mut Self::ItemType>;
-//}
-//
-//impl <T> WeakExtend for Weak<T> {
-//    type ItemType = T;
-//    fn get_mut(&mut self) -> Option<&mut T> {
-//        let rc_op = self.upgrade();
-//        if let Some(ref mut rc_obj) = rc_op {
-//            return Rc::get_mut(&mut rc_obj);
-//        }
-//        return None;
-////        match rc_op {
-////            None => None,
-////            Some(ref mut rc_obj) => Rc::get_mut(&mut rc_obj)
-////        }
-//    }
-//}
+pub trait WeakExtend {
+	type ItemType;
+	// borrow_mut 已经有实现了
+	// fn get_mut(&mut self) -> Option<&mut Self::ItemType>;
+	fn is_none(&self) -> bool;
+	fn is_some(&self) -> bool;
+}
+
+impl <T> WeakExtend for Weak<T> {
+	type ItemType = T;
+	// fn get_mut(&mut self) -> Option<&mut T> {
+	//    // let rc_op = self.upgrade();
+	//    	if self.is_some() {
+	//        return Rc::get_mut(self.upgrade().as_mut().unwrap());
+	//    	}
+	//    	return None;
+	// }
+
+	fn is_none(&self) -> bool {
+		self.upgrade().is_none()
+	}
+
+	fn is_some(&self) -> bool {
+		self.upgrade().is_some()
+	}
+}

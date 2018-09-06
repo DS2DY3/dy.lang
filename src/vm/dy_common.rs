@@ -341,47 +341,6 @@ impl<T> DyRef<T> {
         ReverseChildren(self.last_child())
     }
 
-    // index:索引
-    pub fn children_count(&self) -> usize {
-
-    }
-
-    pub fn child_at(&self, index: usize) -> DyRef<T> {
-
-    }
-
-    pub fn ancestors_count(&self) -> usize {
-
-    }
-
-    pub fn ancestor_at(&self, index: usize) -> DyRef<T> {
-
-    }
-
-    pub fn descendants_count(&self) -> usize {
-
-    }
-
-    pub fn descendant_at(&self, index: usize) -> DyRef<T> {
-
-    }
-
-    pub fn preceding_siblings_count(&self) -> usize {
-
-    }
-
-    pub fn preceding_sibling_at(&self, index: usize) -> DyRef<T> {
-
-    }
-
-    pub fn following_siblings_count(&self) -> usize {
-
-    }
-
-    pub fn following_sibling_at(&self, index: usize) -> DyRef<T> {
-
-    }
-
 
 }
 
@@ -391,6 +350,8 @@ pub mod iterator {
     pub use super::FollowingSiblings;
     pub use super::Children;
     pub use super::ReverseChildren;
+    pub use super::DepthFirstDescendants;  // 深度优先
+    pub use super::BreadthFirstDescendants;  // 广度优先
 }
 
 macro_rules! impl_node_iterator {
@@ -433,6 +394,11 @@ impl_node_iterator!(Children, |node: &DyRef<T>| node.next_sibling());
 /// An iterator of nodes to the children of a given node, in reverse order.
 pub struct ReverseChildren<T>(Option<DyRef<T>>);
 impl_node_iterator!(ReverseChildren, |node: &DyRef<T>| node.pre_sibling());
+
+
+pub struct DepthFirstDescendants<T>(Option<DyRef<T>);
+
+pub struct BreadthFirstDescendants<T>(Option<DyRef<T>);
 
 
 
