@@ -341,6 +341,9 @@ impl<T> DyRef<T> {
         ReverseChildren(self.last_child())
     }
 
+    pub fn descendants(&self, depth_first_or_not: bool, is_reverse: bool) {
+        Traverse::new(self.clone(), depth_first_or_not, is_reverse);
+    }
 
 }
 
@@ -350,8 +353,7 @@ pub mod iterator {
     pub use super::FollowingSiblings;
     pub use super::Children;
     pub use super::ReverseChildren;
-    pub use super::DepthFirstDescendants;  // 深度优先
-    pub use super::BreadthFirstDescendants;  // 广度优先
+    pub use super::Traverse;
 }
 
 macro_rules! impl_node_iterator {
@@ -396,9 +398,45 @@ pub struct ReverseChildren<T>(Option<DyRef<T>>);
 impl_node_iterator!(ReverseChildren, |node: &DyRef<T>| node.pre_sibling());
 
 
-pub struct DepthFirstDescendants<T>(Option<DyRef<T>);
 
-pub struct BreadthFirstDescendants<T>(Option<DyRef<T>);
+pub struct Traverse<T> {
+    pub is_reverse: bool,
+    pub depth_first_or_not: bool,
+    root: DyRef<T>,
+    iterator: Box<Iterator<Item=DyRef<T>>>,
+}
 
+impl<T> Traverse<T> {
+
+    fn new(root: DyRef<T>, depth_first_or_not: bool, is_reverse: bool) -> Traverse<T> {
+        let mut iterator: Box<Iterator<Item=DyRef<T>>>;
+        if depth_first_or_not && is_reverse {
+
+        }
+        else if depth_first_or_not && not is_reverse {
+
+        }
+        else if not depth_first_or_not && is_reverse {
+
+        }
+        else {
+
+        }
+        let traverse = Traverse {
+            depth_first_or_not,
+            is_reverse,
+            root,
+        };
+        return traverse;
+    }
+}
+
+impl<T> Iterator for Traverse<T> {
+    type Item=DyRef<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        None
+    }
+}
 
 
