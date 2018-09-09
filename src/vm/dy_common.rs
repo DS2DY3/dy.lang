@@ -2,6 +2,7 @@ use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
+//use std::borrow::BorrowMut;
 //use std::ops::Drop;
 //use std::borrow::{Borrow, BorrowMut};
 
@@ -340,9 +341,10 @@ impl<T> DyRef<T> {
     pub fn reverse_children(&self) -> ReverseChildren<T> {
         ReverseChildren(self.last_child())
     }
+    
 
-    pub fn descendants(&self, depth_first_or_not: bool, is_reverse: bool) {
-        Traverse::new(self.clone(), depth_first_or_not, is_reverse);
+    pub fn traverse(&self, is_depth_first: bool, is_reverse: bool) {
+        Traverse::new(self.clone(), is_depth_first, is_reverse);
     }
 
 }
@@ -401,33 +403,79 @@ impl_node_iterator!(ReverseChildren, |node: &DyRef<T>| node.pre_sibling());
 
 pub struct Traverse<T> {
     pub is_reverse: bool,
-    pub depth_first_or_not: bool,
+    pub is_depth_first: bool,
     root: DyRef<T>,
-    iterator: Box<Iterator<Item=DyRef<T>>>,
+    cur: Option<DyRef<T>>,
 }
 
 impl<T> Traverse<T> {
 
-    fn new(root: DyRef<T>, depth_first_or_not: bool, is_reverse: bool) -> Traverse<T> {
-        let mut iterator: Box<Iterator<Item=DyRef<T>>>;
-        if depth_first_or_not && is_reverse {
-
-        }
-        else if depth_first_or_not && not is_reverse {
-
-        }
-        else if not depth_first_or_not && is_reverse {
-
-        }
-        else {
-
-        }
+    fn new(root: DyRef<T>, is_depth_first: bool, is_reverse: bool) -> Traverse<T> {
+        let cur = Some(root.clone());
         let traverse = Traverse {
-            depth_first_or_not,
+            is_depth_first,
             is_reverse,
             root,
+            cur,
         };
         return traverse;
+    }
+
+    fn get_next(&mut self, cur_node: DyRef<T>) -> Option<DyRef<T>> {
+        let mut parent = cur_node;
+        loop {
+            let mut first_child: Option<DyRef<T>>;
+            if self.is_depth_first && self.is_reverse {
+                first_child = parent.last_child();
+            }
+            else if self.is_depth_first && !self.is_reverse {
+                first_child = parent.first_child();
+            }
+            else if self.is_reverse {
+                if parent == self.root {
+                    return None;
+                }
+                first_child = parent.pre_sibling();
+            }
+            else {
+                if parent == self.root {
+                    return None;
+                }
+                first_child = parent.next_sibling();
+            }
+            if first_child.is_none() {
+                let mut next_sibling: Option<DyRef<T>>;
+                if self.is_depth_first && self.is_reverse {
+                    if parent == self.root {
+                        return None;
+                    }
+                    next_sibling = parent.pre_sibling();
+                }
+                else if self.is_depth_first && !self.is_reverse {
+                    if parent == self.root {
+                        return None;
+                    }
+                    next_sibling = parent.next_sibling();
+                }
+                else if self.is_reverse {
+                    next_sibling = parent.last_child();
+                }
+                else {
+                    next_sibling = parent.first_child();
+                }
+                if next_sibling.is_none() {
+                    parent = parent.parent().unwrap();
+                    if parent == self.root {
+                        return None;
+                    }
+                } else {
+                    return next_sibling;
+                }
+            } else {
+                return first_child;
+            }
+        }
+        return None;
     }
 }
 
@@ -435,7 +483,13 @@ impl<T> Iterator for Traverse<T> {
     type Item=DyRef<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        None
+        match self.cur.take() {
+            Some(node) => {
+                self.cur = self.get_next(node.clone());
+                Some(node)
+            }
+            None => None
+        }
     }
 }
 
