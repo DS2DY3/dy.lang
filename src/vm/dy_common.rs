@@ -2,9 +2,6 @@ use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
-//use std::borrow::BorrowMut;
-//use std::ops::Drop;
-//use std::borrow::{Borrow, BorrowMut};
 
 // copy from: https://github.com/RazrFalcon/rctree/
 // DyRef 最多有一个parent节点
@@ -49,12 +46,6 @@ impl<T> PartialEq for DyRef<T> {
     }
 }
 
-// impl<T> Drop for DyRef<T> {
-//     fn drop(&mut self) {
-//         // todo:计算引用，然后删除节点，删除节点
-//         // self.detach();
-//     }
-// }
 
 impl<T: fmt::Debug> fmt::Debug for DyRef<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -99,9 +90,9 @@ impl<T> DyRef<T> {
     }
 
     fn _deep_copy(parent: &mut DyRef<T>, node: &DyRef<T>) where T: Clone {
-        for mut child in node.children() {
+        for child in node.children() {
             let mut new_node = child.make_copy();
-            parent.append(&new_node.clone());
+            parent.append(&new_node);
 
             if child.has_children() {
                 DyRef::_deep_copy(&mut new_node, &child);
@@ -113,7 +104,6 @@ impl<T> DyRef<T> {
     pub fn make_copy(&self) -> DyRef<T> where T: Clone {
         DyRef::new(self.borrow().clone())
     }
-
 
     // 访问节点
 
@@ -168,13 +158,6 @@ impl<T> DyRef<T> {
         self.first_child().is_some()
     }
 
-    pub fn contains(&self, child: &DyRef<T>) -> bool {
-        false
-    }
-
-    pub fn includes(&self, child: &DyRef<T>) -> bool {
-        false
-    }
 
     // 插入操作
 
@@ -183,7 +166,6 @@ impl<T> DyRef<T> {
         child.detach();
         let mut self_node = self.0.borrow_mut();
         let mut child_borrow = child.0.borrow_mut();
-        // let mut last_child_rc_op = self_node.last_child.upgrade();
         if self_node.last_child.upgrade().is_some() {
             let last_child_rc = self_node.last_child.upgrade().unwrap();
             last_child_rc.borrow_mut().next_sibling = Some(Rc::clone(&child.0));
@@ -341,7 +323,7 @@ impl<T> DyRef<T> {
     pub fn reverse_children(&self) -> ReverseChildren<T> {
         ReverseChildren(self.last_child())
     }
-    
+
 
     pub fn traverse(&self, is_depth_first: bool, is_reverse: bool) {
         Traverse::new(self.clone(), is_depth_first, is_reverse);
