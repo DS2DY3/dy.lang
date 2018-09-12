@@ -476,3 +476,69 @@ impl<T> Iterator for Traverse<T> {
 }
 
 
+// ------------------------ test --------------------------
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_parent() {
+        let mut parent = DyRef::new(1);
+        let child = DyRef::new(2);
+        parent.append(&child);
+        //assert_eq!(child, parent.first_child().unwrap());
+        assert_eq!(child.parent().unwrap(), parent);
+        // assert_eq!(parent.parent(), None);
+    }
+
+    #[test]
+    fn test_root() {
+        let mut parent = DyRef::new(1);
+        let child = DyRef::new(2);
+        parent.append(&child);
+        //assert_eq!(child.root(), parent);
+        assert_eq!(parent.root(), parent);
+    }
+
+    #[test]
+    fn test_first_child() {
+        let mut parent = DyRef::new(1);
+        let child = DyRef::new(2);
+        parent.append(&child);
+        assert_eq!(child, parent.first_child().unwrap());
+    }
+
+    #[test]
+    fn test_last_child() {
+        let mut parent = DyRef::new(1);
+        let child = DyRef::new(2);
+        parent.append(&child);
+        assert_eq!(child, parent.last_child().unwrap());
+    }
+
+    #[test]
+    fn test_next_sibling() {
+        let mut parent = DyRef::new(1);
+        let child = DyRef::new(2);
+        parent.insert_after(&child);
+        assert_eq!(child, parent.next_sibling().unwrap());
+    }
+
+    #[test]
+    fn test_pre_sibling() {
+        let mut parent = DyRef::new(1);
+        let child = DyRef::new(2);
+        parent.insert_before(&child);
+        assert_eq!(child, parent.pre_sibling().unwrap());
+    }
+
+    #[test]
+    fn test_detach() {
+        let mut parent = DyRef::new(1);
+        let child = DyRef::new(2);
+        parent.append(&child);
+        child.detach();
+        assert_eq!(child.parent().is_none(), true);
+    }
+}
+
