@@ -175,11 +175,7 @@ impl<T> DyRef<T> {
             self_node.first_child = Some(Rc::clone(&child.0));
         }
         self_node.last_child = Rc::downgrade(&child.0);
-        let parent_rc_op = self_node.parent.upgrade();
-        if let Some(ref parent_rc) = parent_rc_op {
-            child_borrow.parent = Rc::downgrade(parent_rc)
-        }
-
+        child_borrow.parent = Rc::downgrade(&self.0);
     }
 
     pub fn prepend(&self, child: &DyRef<T>) {
@@ -208,7 +204,7 @@ impl<T> DyRef<T> {
             self_node.last_child = Rc::downgrade(&child.0);
         }
         self_node.first_child = Some(Rc::clone(&child.0));
-        child_borrow.parent = self_node.parent.clone();
+        child_borrow.parent = Rc::downgrade(&self.0);
     }
 
     pub fn insert_after(&self, sibling: &DyRef<T>) {
@@ -221,6 +217,7 @@ impl<T> DyRef<T> {
             if Rc::ptr_eq(&parent_mut.last_child.upgrade().unwrap(), &self.0) {
                 parent_rc.borrow_mut().last_child = Rc::downgrade(&sibling.0);
             }
+            sibling.0.borrow_mut().parent = Rc::downgrade(parent_rc);
         }
         self_node.next_sibling = Some(Rc::clone(&sibling.0));
         sibling.0.borrow_mut().pre_sibling = Rc::downgrade(&self.0)
@@ -236,6 +233,7 @@ impl<T> DyRef<T> {
             if Rc::ptr_eq(parent_mut.first_child.as_mut().unwrap(), &self.0) {
                 parent_mut.first_child = Some(Rc::clone(&sibling.0));
             }
+            sibling.0.borrow_mut().parent = Rc::downgrade(parent_rc);
         }
         self_node.pre_sibling = Rc::downgrade(&sibling.0);
         sibling.0.borrow_mut().next_sibling = Some(Rc::clone(&self.0));
@@ -486,9 +484,9 @@ mod test {
         let mut parent = DyRef::new(1);
         let child = DyRef::new(2);
         parent.append(&child);
-        //assert_eq!(child, parent.first_child().unwrap());
+        assert_eq!(child, parent.first_child().unwrap());
         assert_eq!(child.parent().unwrap(), parent);
-        // assert_eq!(parent.parent(), None);
+        assert_eq!(parent.parent(), None);
     }
 
     #[test]
@@ -496,7 +494,7 @@ mod test {
         let mut parent = DyRef::new(1);
         let child = DyRef::new(2);
         parent.append(&child);
-        //assert_eq!(child.root(), parent);
+        assert_eq!(child.root(), parent);
         assert_eq!(parent.root(), parent);
     }
 
@@ -506,6 +504,8 @@ mod test {
         let child = DyRef::new(2);
         parent.append(&child);
         assert_eq!(child, parent.first_child().unwrap());
+        parent.prepend(&child);
+        assert_eq!(child, parent.first_child().unwrap());
     }
 
     #[test]
@@ -513,6 +513,8 @@ mod test {
         let mut parent = DyRef::new(1);
         let child = DyRef::new(2);
         parent.append(&child);
+        assert_eq!(child, parent.last_child().unwrap());
+        parent.prepend(&child);
         assert_eq!(child, parent.last_child().unwrap());
     }
 
@@ -539,6 +541,45 @@ mod test {
         parent.append(&child);
         child.detach();
         assert_eq!(child.parent().is_none(), true);
+        assert_eq!(!parent.has_children(), true);
+    }
+
+    #[test]
+    fn test_copy() {
+        let mut parent = DyRef::new(1);
+        let child = DyRef::new(2);
+        parent.append(&child);
+        let copy_parent = parent.deep_copy();
+        assert_eq!(copy_parent.has_children(), true);
+        assert_ne!(copy_parent.first_child().unwrap(), child);
+        let copy_child = copy_parent.first_child().unwrap();
+        assert_eq!(*child.borrow_mut(), *copy_child.borrow_mut());
+    }
+
+    #[test]
+    fn test_clone() {
+        let mut parent = DyRef::new(1);
+        let clone_parent = parent.clone();
+        let child = DyRef::new(2);
+        parent.append(&child);
+        assert_eq!(clone_parent, parent);
+        assert_eq!(clone_parent.first_child().unwrap(), child);
+    }
+
+    #[test]
+    fn test_iter() {
+        let mut parent = DyRef::new(1);
+        let child = DyRef::new(2);
+        parent.append(&child);
+        parent.append(&DyRef::new(3));
+        child.append(&DyRef::new(4));
+        let next_child = child.next_sibling().unwrap();
+        next_child.prepend(&DyRef::new(5));
+        next_child.insert_before(&DyRef::new(6));
+        next_child.insert_after(&DyRef::new(7));
+
+        let mut children = parent.children();
+        // assert_eq!(children.iter().count(), 3);
     }
 }
 
