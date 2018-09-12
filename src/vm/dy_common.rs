@@ -215,7 +215,7 @@ impl<T> DyRef<T> {
         if let Some(ref mut parent_rc) = parent_rc_op {
             let mut parent_mut = parent_rc.borrow_mut();
             if Rc::ptr_eq(&parent_mut.last_child.upgrade().unwrap(), &self.0) {
-                parent_rc.borrow_mut().last_child = Rc::downgrade(&sibling.0);
+                parent_mut.last_child = Rc::downgrade(&sibling.0);
             }
             sibling.0.borrow_mut().parent = Rc::downgrade(parent_rc);
         }
@@ -578,8 +578,8 @@ mod test {
         next_child.insert_before(&DyRef::new(6));
         next_child.insert_after(&DyRef::new(7));
 
-        let mut children = parent.children();
-        // assert_eq!(children.iter().count(), 3);
+        let children = parent.children();
+        assert_eq!(children.count(), 3);
     }
 }
 
