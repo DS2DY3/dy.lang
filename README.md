@@ -2,11 +2,9 @@
 
 This is a C# like dynamic typed script language!
 
-Just do it yourself, and make it difference!
+Just do it, and make it difference!
 
-All is garbage!
-
-[motivation]
+## Motivation
 
 1.没有运行时检查：运行高效
 

@@ -2,6 +2,7 @@ use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
+use std::default::Default;
 
 // copy from: https://github.com/RazrFalcon/rctree/
 // DyRef 最多有一个parent节点
@@ -60,6 +61,12 @@ impl<T: fmt::Display> fmt::Display for DyRef<T> {
 }
 
 
+impl<T: Default> Default for DyRef<T> {
+    fn default() -> DyRef<T> {
+        DyRef::new(T::default())
+    }
+}
+
 impl<T> DyRef<T> {
     pub fn new(data: T) ->DyRef<T> {
         DyRef(Rc::new(RefCell::new(DyNode{
@@ -71,6 +78,12 @@ impl<T> DyRef<T> {
             pre_sibling: Weak::new(),
         })))
     }
+
+
+//    pub fn replace(&mut self, data: T) {
+//        self.0.
+//    }
+
 
     pub fn borrow(&self) -> Ref<T> {
         // 不导入 Borrow 的时候是 RefCell 的，导入 Borrow 就是 Rc as Borrow
@@ -583,7 +596,6 @@ mod test {
     fn test_iter() {
         let mut parent = DyRef::new(1);
         let child = DyRef::new(2);
-        let child_eq = DyRef::new(2);
         parent.append(&child);
         parent.append(&DyRef::new(3));
         child.append(&DyRef::new(4));
@@ -593,10 +605,11 @@ mod test {
         next_child.insert_after(&DyRef::new(7));
 
         let children = parent.children();
-        // assert_eq!(children.count(), 3);
-        for iter_child in children {
-            println!("{}", iter_child);
-        }
+        assert_eq!(children.next().unwrap(), child);
+        assert_eq!(children.next().unwrap().borrow(), &6);
+        assert_eq!(children.next().unwrap().borrow(), &3);
+        assert_eq!(children.next().unwrap().borrow(), &7);
+
     }
 }
 

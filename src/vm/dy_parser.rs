@@ -3,8 +3,10 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::iter::FromIterator;
 use vm::dy_util::VecExtend;
+use vm::dy_common::DyRef;
 
-const KEY_WORDS: [&'static str; 58] = ["abstract", "as", "base", "break", "case", "catch", "checked", "class", "const", "continue",
+// https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/index
+const KEYWORDS: [&'static str; 58] = ["abstract", "as", "base", "break", "case", "catch", "checked", "class", "const", "continue",
 		"default", "delegate", "do", "else", "enum", "event", "explicit", "extern", "finally",
 		"fixed", "for", "foreach", "goto", "if", "implicit", "in", "interface", "internal", "is",
 		"lock", "namespace", "new", "operator", "out", "override", "params", "private",
@@ -12,16 +14,21 @@ const KEY_WORDS: [&'static str; 58] = ["abstract", "as", "base", "break", "case"
 		"struct", "switch", "this", "throw", "try", "typeof", "unchecked", "unsafe", "using", "virtual",
 		"volatile", "while"];
 
+
+
 const OPERATORS: [&'static str; 44] = ["++", "--", "->", "+", "-", "!", "~", "++", "--", "&", "*", "/", "%", "+", "-", "<<", ">>", "<", ">",
 		"<=", ">=", "==", "!=", "&", "^", "|", "&&", "||", "??", "?", "::", ":",
 		"=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>=", "=>"];
 
-const BUILT_TYPES: [&'static str; 16] = ["bool", "byte", "char", "decimal", "double", "float", "int", "long", "object", "sbyte", "short",
+const BUILTIN_TYPES: [&'static str; 16] = ["bool", "byte", "char", "decimal", "double", "float", "int", "long", "object", "sbyte", "short",
 		"string", "uint", "ulong", "ushort", "void"];
 
-const PREPROCESSOR_KEY_WORLDS: [&'static str; 12] = ["define", "elif", "else", "endif", "endregion", "error", "if", "line", "pragma", "region", "undef", "warning"];
+const PREPROCESSOR: [&'static str; 12] = ["define", "elif", "else", "endif", "endregion", "error", "if", "line", "pragma", "region", "undef", "warning"];
 
 
+const PUNCTUATORS: [&'static str; 10] = [";", ":", ",", ".", "(", ")", "[", "]", "{", "}"];
+
+// https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/lexical-structure
 #[derive(Debug)]
 #[derive(PartialEq)]
 enum TokenKind {
@@ -34,20 +41,19 @@ enum TokenKind {
     PreprocessorDirectiveExpected,
     PreprocessorCommentExpected,
     PreprocessorUnexpectedDirective,
-    VerbatimStringLiteral,
 
-    LastWSToken, // Marker only
 
-    VerbatimStringBegin,
-    BuiltInLiteral,
+    VerbatimPrefix,    // @
+    InterpolatedPrefix,   // $
+    BoolLiteral,   // true, false
+    NullLiteral,  // bool
     CharLiteral,
     StringLiteral,
     IntegerLiteral,
     RealLiteral,
-    Punctuator,
+    PunctuatorOrOperator,  // 分隔符
     Keyword,
     Identifier,
-    ContextualKeyword,
     EOF,
 
 }
@@ -69,11 +75,12 @@ struct SyntaxToken {
     begin_at: usize,
     end_at: usize,
     block_state: BlockState,
+    line_index: usize,
 }
 
 impl SyntaxToken {
     fn new(kind: TokenKind, begin_at: usize, end_at: usize) -> SyntaxToken {
-        SyntaxToken{kind, begin_at, end_at, block_state: BlockState::None }
+        SyntaxToken{kind, begin_at, end_at, block_state: BlockState::None, line_index: 0}
     }
 }
 
@@ -84,7 +91,7 @@ struct FormatedLine {
     end_at: usize,
     tokens: Vec<SyntaxToken>,
     block_state: BlockState,
-    region: Weak<Region>,
+    // region: Option<RegionRef>,
 }
 
 impl FormatedLine {
@@ -95,8 +102,13 @@ impl FormatedLine {
             end_at,
             tokens: Vec::new(),
             block_state: BlockState::None,
-            region: Weak::new(),
+            // region: None,
         }
+    }
+
+    fn push_token(&mut self, mut token: SyntaxToken) -> &SyntaxToken{
+        token.line_index = self.index;
+        self.tokens.put(token)
     }
 }
 
@@ -104,7 +116,7 @@ impl FormatedLine {
 #[derive(PartialOrd, PartialEq)]
 #[derive(Copy, Clone)]
 pub enum RegionKind {
-    None,
+    Root,
     Region,
     If,
     Elif,
@@ -116,39 +128,36 @@ pub enum RegionKind {
     InactiveElse,
 }
 
+
 #[derive(Debug)]
 struct Region {
     kind: RegionKind,
     line_index: usize,
-    parent: Weak<Region>,
-    children: Vec<Region>,
+}
+
+impl Default for Region {
+    fn default() -> Region {
+        Region::new(RegionKind::Root, 0)
+    }
 }
 
 impl Region {
-   fn new(kind: RegionKind, line_index: usize) -> Region {
-       return Region {
-           kind,
-           line_index,
-           children: Vec::new(),
-           parent: Weak::new(),
-       };
-   }
-
-
-
-    fn new_rc(kind: RegionKind, line_index: usize) -> Rc<Region> {
-        return Rc::new(Region::new(kind, line_index));
+    fn new(kind: RegionKind, line_index: usize) -> Region {
+        Region {
+            kind,
+            line_index,
+        }
     }
-
-
 }
+
+type RegionRef = DyRef<Region>;
+
 
 #[derive(Debug)]
 pub struct DyParser {
     source: Vec<char>,
     formated_lines: Vec<FormatedLine>,
-    root_region: Rc<Region>,
-
+    root_region: RegionRef,
 }
 
 
@@ -159,7 +168,7 @@ impl DyParser {
         DyParser {
             source,
             formated_lines: Vec::new(),
-            root_region: Rc::new(Region::new(RegionKind::None, 0)),
+            root_region: RegionRef::default(),
         }
     }
 
@@ -177,13 +186,12 @@ impl DyParser {
                     let mut formated_line = FormatedLine::new(formated_line_count, pre_line_begin, pre_line_end);
                     self.tokenize(&mut formated_line);
                     if formated_line_count == 0 {
-                        formated_line.region = Rc::downgrade(&self.root_region);
+                        // formated_line.region = self.root_region.clone()
                         formated_line.block_state = BlockState::None;
                     }
                     else {
                         let pre_line = &self.formated_lines[self.formated_lines.len()-1];
-                        formated_line.region = Weak::clone(&pre_line.region);
-                        // formated_line.region = Rc::downgrade(&pre_line.region.upgrade().unwrap());
+                        // formated_line.region = pre_line.region.clone();
                         formated_line.block_state = pre_line.block_state;
                     }
                     self.formated_lines.push(formated_line);
@@ -200,7 +208,7 @@ impl DyParser {
         let end_at = formated_line.end_at;
         let ws = self.scan_whitespace(&mut start_at, end_at);
         if let Some(x) = ws {
-            formated_line.tokens.push(x);
+            formated_line.push_token(x);
         }
         if formated_line.block_state == BlockState::None && start_at <= end_at && self.source[start_at] == '#' {
 
@@ -651,35 +659,35 @@ impl DyParser {
     }
 
     // ----------------------------------- region --------------------------------------------------
-    fn open_region(&mut self, formated_line: &mut FormatedLine, region_kind: RegionKind) {
-        // todo: 同一行不能有两个region
-        let mut parent_region = Weak::clone(&formated_line.region);
-        if region_kind == RegionKind::InactiveElif ||
-            region_kind == RegionKind::Elif ||
-            region_kind == RegionKind::Else ||
-            region_kind == RegionKind::InactiveElse {
-            let mut region_rc_op = formated_line.region.upgrade();
-            if let Some(ref mut region_rc) = region_rc_op {
-                let region_op = Rc::get_mut(region_rc);
-                if let Some(region) = region_op {
-                    parent_region = Weak::clone(&region.parent)
-                }
-            }
-            // todo error
-        }
-        let mut parent_rc = parent_region.upgrade().unwrap();
-        let parent = Rc::get_mut(&mut parent_rc).unwrap();
-        let region = Region::new(region_kind, formated_line.index);
-        parent.children.push(region);
-    }
-
-    fn close_region(formated_line: &mut FormatedLine) {
-        let region_rc = formated_line.region.upgrade();
-        match region_rc {
-            None => formated_line.region = Weak::new(),
-            Some(region) => formated_line.region = Weak::clone(&region.parent),
-        }
-    }
+//    fn open_region(&mut self, formated_line: &mut FormatedLine, region_kind: RegionKind) {
+//        // todo: 同一行不能有两个region
+//        let mut parent_region = Weak::clone(&formated_line.region);
+//        if region_kind == RegionKind::InactiveElif ||
+//            region_kind == RegionKind::Elif ||
+//            region_kind == RegionKind::Else ||
+//            region_kind == RegionKind::InactiveElse {
+//            let mut region_rc_op = formated_line.region.upgrade();
+//            if let Some(ref mut region_rc) = region_rc_op {
+//                let region_op = Rc::get_mut(region_rc);
+//                if let Some(region) = region_op {
+//                    parent_region = Weak::clone(&region.parent)
+//                }
+//            }
+//            // todo error
+//        }
+//        let mut parent_rc = parent_region.upgrade().unwrap();
+//        let parent = Rc::get_mut(&mut parent_rc).unwrap();
+//        let region = Region::new(region_kind, formated_line.index);
+//        parent.children.push(region);
+//    }
+//
+//    fn close_region(formated_line: &mut FormatedLine) {
+//        let region_rc = formated_line.region.upgrade();
+//        match region_rc {
+//            None => formated_line.region = Weak::new(),
+//            Some(region) => formated_line.region = Weak::clone(&region.parent),
+//        }
+//    }
 }
 
 
