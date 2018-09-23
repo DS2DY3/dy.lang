@@ -6,14 +6,18 @@ use vm::dy_util::VecExtend;
 use vm::dy_common::DyRef;
 
 // https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/index
-const KEYWORDS: [&'static str; 58] = ["abstract", "as", "base", "break", "case", "catch", "checked", "class", "const", "continue",
-		"default", "delegate", "do", "else", "enum", "event", "explicit", "extern", "finally",
-		"fixed", "for", "foreach", "goto", "if", "implicit", "in", "interface", "internal", "is",
-		"lock", "namespace", "new", "operator", "out", "override", "params", "private",
-		"protected", "public", "readonly", "ref", "return", "sealed", "sizeof", "stackalloc", "static",
-		"struct", "switch", "this", "throw", "try", "typeof", "unchecked", "unsafe", "using", "virtual",
-		"volatile", "while"];
+const KEYWORDS: [&'static str; 78] = ["abstract", "as", "base", "bool", "break", "byte", "case", "catch",
+    "char", "checked", "class", "const", "contine", "decimal", "default", "delegate", "do", "double", "else", "enum",
+    "event", "explicit", "extern", "false", "finally", "fixed", "float", "for", "foreach", "goto", "if", "implicit",
+    "in", "int", "interface", "internal", "is", "lock", "long", "namepsace", "new", "null", "object", "operator",
+    "out", "override", "params", "private", "protected", "public", "readonly", "ref", "return", "sbyte", "sealed",
+    "short", "sizeof", "stackalloc", "static", "string", "struct", "switch", "this", "throw", "true", "try", "typeof", "uint",
+    "ulong", "unchecked", "unsafe", "ushort", "using static", "using", "virtual", "void", "volatile", "while",];
 
+// contextual keywords
+const CONTEXTUALS: [&'static str; 28] = ["add", "alias", "ascending", "async", "await", "by", "desending", "dynamic", "equals", "from", "get", "global", "group",
+    "into", "join", "let", "nameof", "on", "orderby", "partial", "remove", "select", "set", "value", "var", "when", "where",
+    "yield", ];
 
 
 const OPERATORS: [&'static str; 44] = ["++", "--", "->", "+", "-", "!", "~", "++", "--", "&", "*", "/", "%", "+", "-", "<<", ">>", "<", ">",
@@ -26,7 +30,10 @@ const BUILTIN_TYPES: [&'static str; 16] = ["bool", "byte", "char", "decimal", "d
 const PREPROCESSOR: [&'static str; 12] = ["define", "elif", "else", "endif", "endregion", "error", "if", "line", "pragma", "region", "undef", "warning"];
 
 
-const PUNCTUATORS: [&'static str; 10] = [";", ":", ",", ".", "(", ")", "[", "]", "{", "}"];
+const PUNCTUATORS: [&'static str; 45] = [">>=", "<<=", "=>", "^=", "|=", "&=", "%=", "/=", "*=", "+=", "-=",
+    ">=", "<=", "==", "!=", ">>", "<<", "||", "&&", "--", "++", "?:", "??", "?.", "?[", "::", "->", ">", "<",
+    "=", "~", "!", "^", "|", "&", "%", "*", "/", "+", "-", ".", "(", ")", "[", "]"];
+
 
 // https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/lexical-structure
 
@@ -44,9 +51,7 @@ impl Span {
 
 
 trait Scanner {
-    type Item;
-    fn scan(dy_parser: &DyParser) -> Option<Self::Item>;
-    fn get_span(&self) -> &Span;
+    fn scan(dy_parser: &DyParser) -> Option<Token>;
 }
 
 
@@ -62,8 +67,7 @@ impl Whitespace {
 }
 
 impl Scanner for Whitespace {
-    type Item = Whitespace;
-    fn scan(dy_parser: &DyParser) -> Option<Self::Item> {
+    fn scan(dy_parser: &DyParser) -> Option<Token> {
         let (mut start_at, end_at) = dy_parser.cursor_span();
         let begin = start_at;
         while start_at <= end_at {
@@ -78,12 +82,9 @@ impl Scanner for Whitespace {
         if start_at == begin {
             return None;
         }
-        return Some(Whitespace::new(begin, start_at-1 as usize));
+        return Some(Token::Whitespace(Whitespace::new(begin, start_at-1 as usize)));
     }
 
-    fn get_span(&self) -> &Span {
-        return &self.span;
-    }
 }
 
 
@@ -109,28 +110,24 @@ impl Comment {
 }
 
 impl Scanner for Comment {
-    type Item = Comment;
-    fn scan(dy_parser: &DyParser) -> Option<Self::Item> {
+    fn scan(dy_parser: &DyParser) -> Option<Token> {
         if dy_parser.look_ahead("//") {
             let begin = dy_parser.cursor;
             let line_ending = dy_parser.find_line_ending(dy_parser.cursor+2);
             // dy_parser.cursor = line_ending + 1;
-            return Some(Comment::new(CommentKind::Single, begin, line_ending));
+            return Some(Token::Comment(Comment::new(CommentKind::Single, begin, line_ending)));
         }
         else if dy_parser.look_ahead("/*") {
             let begin = dy_parser.cursor;
             let comment_ending = dy_parser.find_next("*/", begin+2);
             if comment_ending != 0 {
-                return Some(Comment::new(CommentKind::Multiple, begin, comment_ending));
+                return Some(Token::Comment(Comment::new(CommentKind::Multiple, begin, comment_ending)));
             }
             // missing
         }
         return None
     }
 
-    fn get_span(&self) -> &Span {
-        return &self.span;
-    }
 }
 
 
@@ -147,10 +144,18 @@ pub struct StringLiteral {
     pub span: Span,
 }
 
+impl StringLiteral {
+    fn new(kind: StringKind, start: usize, end: usize) -> StringLiteral {
+        StringLiteral {
+            kind,
+            span: Span::new(start, end),
+        }
+    }
+}
+
 
 impl Scanner for StringLiteral {
-    type Item = StringLiteral;
-    fn scan(dy_parser: &DyParser) -> Option<Self::Item> {
+    fn scan(dy_parser: &DyParser) -> Option<Token> {
         if dy_parser.look_ahead("@\"") {
 
         }
@@ -158,37 +163,334 @@ impl Scanner for StringLiteral {
 
         }
         else if dy_parser.look_ahead("\"") {
+            let begin = dy_parser.cursor;
+            let mut next_quote = dy_parser.find_next("\"", begin+1);
+            while next_quote != 0 {
+                if dy_parser.source[next_quote-1] != '\\' {
+                    return Some(Token::StringLiteral(StringLiteral::new(StringKind::Normal, begin, next_quote)));
+                }
+                else {
+                    next_quote = dy_parser.find_next("\"", next_quote+1);
+                }
+            }
 
         }
         return None
     }
 
-    fn get_span(&self) -> &Span {
-        return &self.span;
+}
+
+
+#[derive(Debug)]
+pub struct IntegerLiteral {
+    pub span: Span,
+}
+
+impl IntegerLiteral {
+    fn new(start: usize, end: usize) -> IntegerLiteral {
+        IntegerLiteral {
+            span: Span::new(start, end),
+        }
     }
 }
 
+impl Scanner for IntegerLiteral {
+    fn scan(dy_parser: &DyParser) -> Option<Token> {
+        let begin = dy_parser.cursor;
+        let len = dy_parser.source.len();
+        let mut radix = 10;
+        let mut start_at = begin;
+        if dy_parser.look_ahead("0x") || dy_parser.look_ahead("0X") {
+            start_at = begin + 2;
+            if start_at >= len {
+                return None;
+            }
+            radix = 16;
+        }
+        let mut ch = dy_parser.source[start_at];
+        let mut has_integer = false;
+        while ch.is_digit(radix) {
+            has_integer = true;
+            start_at += 1;
+            if start_at >= len {
+                break;
+            }
+            ch = dy_parser.source[start_at];
+        }
+        if has_integer {
+            if dy_parser.find_next("ul", start_at) != 0 || dy_parser.find_next("Ul", start_at) !=0
+                || dy_parser.find_next("UL", start_at) != 0 || dy_parser.find_next("uL", start_at) != 0 {
+                start_at += 2;
+            }
+            else if dy_parser.find_next("u", start_at) != 0 || dy_parser.find_next("l", start_at) !=0
+                || dy_parser.find_next("L", start_at) != 0 || dy_parser.find_next("L", start_at) != 0 {
+                start_at += 1;
+            }
+            if has_integer && !dy_parser.is_alphanumeric_at(start_at) {
+                return Some(Token::IntegerLiteral(IntegerLiteral::new(begin, start_at-1)));
+            }
+        }
+        return None;
+    }
+}
+
+
+#[derive(Debug)]
+pub struct RealLiteral {
+    pub span: Span,
+}
+
+impl RealLiteral {
+    fn new(start: usize, end: usize) -> RealLiteral {
+        RealLiteral {
+            span: Span::new(start, end),
+        }
+    }
+}
+
+impl Scanner for RealLiteral {
+    fn scan(dy_parser: &DyParser) -> Option<Token> {
+        let begin = dy_parser.cursor;
+        let mut ch = dy_parser.source[begin];
+        let mut start_at = begin;
+        let mut is_number = false;
+        let mut is_real = false;
+        let len = dy_parser.source.len();
+        while ch.is_digit(10) {
+            start_at += 1;
+            if start_at >= len {
+                return None;
+            }
+            ch = dy_parser.source[start_at];
+            is_number = true;
+        }
+        if ch == '.' {
+            is_real = true;
+            is_number = false;
+            start_at += 1;
+            if start_at >= len {
+                return None;
+            }
+            ch = dy_parser.source[start_at];
+            while ch.is_digit(10) {
+                is_number = true;
+                start_at += 1;
+                if start_at >= len {
+                    break;
+                }
+                ch = dy_parser.source[start_at];
+            }
+            if !is_number {
+                return None;
+            }
+        }
+        if is_number && (ch == 'E' || ch == 'e') {
+            is_real = false;
+            start_at += 1;
+            if start_at > len {
+                return None
+            }
+            ch = dy_parser.source[start_at];
+            if ch == '+' || ch == '-' {
+                start_at += 1;
+                if start_at > len {
+                    return None
+                }
+                ch = dy_parser.source[start_at];
+            }
+            while ch.is_digit(10) {
+                is_real = true;
+                start_at += 1;
+                ch = dy_parser.source[start_at];
+            }
+            if !is_real {
+                return None;
+            }
+        }
+        if is_number && (ch == 'F' || ch == 'f' || ch == 'm' || ch == 'M') {
+            start_at += 1;
+            is_real = true;
+        }
+        if is_number && is_real && !dy_parser.is_alphanumeric_at(start_at){
+            return Some(Token::RealLiteral(RealLiteral::new(begin, start_at-1)));
+        }
+        return None;
+    }
+}
+
+
+#[derive(Debug)]
 pub struct CharLiteral {
     pub span: Span,
 }
 
+impl CharLiteral {
+    fn new(start: usize, end: usize) -> CharLiteral {
+        return CharLiteral {
+            span: Span::new(start, end),
+        }
+    }
+}
+
+
+impl Scanner for CharLiteral {
+    // https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/keywords/char
+    fn scan(dy_parser: &DyParser) -> Option<Token> {
+        if dy_parser.look_ahead("\'") {
+            let begin = dy_parser.cursor;
+            let end = dy_parser.find_next("\'", begin+1);
+            // Character literal
+            if end == begin + 2 {
+                let ch = dy_parser.source[begin+1];
+                if ch == '\\' {
+
+                }
+                else {
+                    return Some(Token::CharLiteral(CharLiteral::new(begin, end)))
+                }
+            }
+            else if end == begin + 7 {
+
+            }
+        }
+        return None;
+    }
+}
+
+
+#[derive(Debug)]
+pub struct BoolLiteral {
+    pub span: Span,
+}
+
+
+impl BoolLiteral {
+    fn new(start: usize, end: usize) -> BoolLiteral {
+        BoolLiteral{
+            span: Span::new(start, end),
+        }
+    }
+}
+
+
+impl Scanner for BoolLiteral {
+    fn scan(dy_parser: &DyParser) -> Option<Token> {
+        let begin = dy_parser.cursor;
+        let mut start_at = begin;
+        if dy_parser.look_ahead("true") {
+            start_at += 4;
+        }
+        else if dy_parser.look_ahead("false") {
+            start_at += 5;
+        }
+        if start_at != begin && !dy_parser.is_alphanumeric_at(start_at){
+            return Some(Token::BoolLiteral(BoolLiteral::new(begin, start_at-1)));
+        }
+        return None;
+    }
+}
+
+
+#[derive(Debug)]
+pub struct NullLiteral {
+    pub span: Span,
+}
+
+
+impl NullLiteral {
+    fn new(start: usize, end: usize) -> NullLiteral {
+        NullLiteral{
+            span: Span::new(start, end),
+        }
+    }
+}
+
+
+impl Scanner for NullLiteral {
+    fn scan(dy_parser: &DyParser) -> Option<Token> {
+        let begin = dy_parser.cursor;
+        let mut start_at = begin;
+        if dy_parser.look_ahead("null") {
+            start_at += 4;
+        }
+        if start_at != begin && !dy_parser.is_alphanumeric_at(start_at){
+            return Some(Token::NullLiteral(NullLiteral::new(begin, start_at-1)));
+        }
+        return None;
+    }
+}
+
+
+#[derive(Debug)]
+pub struct Keyword {
+    pub span: Span,
+}
+
+impl Scanner for Keyword {
+    fn scan(dy_sparser: &DyParser) -> Option<Token> {
+        for keyword in KEYWORDS.iter() {
+            if dy_sparser.look_ahead(keyword) {
+
+            }
+        }
+        return None
+    }
+}
+
+
+#[derive(Debug)]
+pub struct Identifier {
+    pub span: Span,
+}
+
+impl Scanner for Identifier {
+    fn scan(dy_sparser: &DyParser) -> Option<Token> {
+        None
+    }
+}
+
+
+#[derive(Debug)]
+pub struct Contextual {
+    pub span: Span,
+}
+
+impl Scanner for Contextual {
+    fn scan(dy_sparser: &DyParser) -> Option<Token> {
+        None
+    }
+}
+
+
+#[derive(Debug)]
+pub struct Punctuator {
+    pub span: Span,
+}
+
+impl Scanner for Punctuator {
+    fn scan(dy_sparser: &DyParser) -> Option<Token> {
+        None
+    }
+}
 
 #[derive(Debug)]
 pub enum Token {
     Whitespace(Whitespace),
     Comment(Comment),
 
-    StringLiteral,
-    IntegerLiteral,
-    RealLiteral,
-    CharLiteral,
-    BoolLiteral,
-    NullLiteral,
+    StringLiteral(StringLiteral),
+    IntegerLiteral(IntegerLiteral),
+    RealLiteral(RealLiteral),
+    CharLiteral(CharLiteral),
+    BoolLiteral(BoolLiteral),
+    NullLiteral(NullLiteral),
 
-    Keyword,
-    Identifier,
+    Keyword(Keyword),
+    Contextual(Contextual),
+    Identifier(Identifier),
+    Punctuator(Punctuator),
+
     Preprocessor,
-    Punctuator,
     EoF,
 }
 
@@ -315,7 +617,12 @@ impl DyParser {
         return len-1;
     }
 
-
+    fn is_alphanumeric_at(&self, start_at: usize) -> bool {
+        if start_at >= self.source.len() {
+            return false;
+        }
+        return self.source[start_at].is_alphanumeric();
+    }
 
     fn get_string(&self, start_at: usize, end_at: usize) -> Option<String> {
         if start_at < end_at && end_at < self.source.len() {

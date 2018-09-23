@@ -22,3 +22,5 @@ Script Inspector: https://assetstore.unity.com/packages/tools/visual-scripting/s
 C# reference: https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/index
 
 Rusty EcmaScript Scanner: https://github.com/FreeMasen/ress
+
+Parsing Techniques - Second Edition: https://dickgrune.com/Books/PTAPG_2nd_Edition/
