@@ -29,135 +29,179 @@ const PREPROCESSOR: [&'static str; 12] = ["define", "elif", "else", "endif", "en
 const PUNCTUATORS: [&'static str; 10] = [";", ":", ",", ".", "(", ")", "[", "]", "{", "}"];
 
 // https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/lexical-structure
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Span {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl Span {
+    fn new(start: usize, end: usize) -> Span {
+        Span { start, end, }
+    }
+}
+
+
+trait Scanner {
+    type Item;
+    fn scan(dy_parser: &DyParser) -> Option<Self::Item>;
+    fn get_span(&self) -> &Span;
+}
+
+
 #[derive(Debug)]
-#[derive(PartialEq)]
-enum TokenKind {
-    Missing,
-    Whitespace,
-    Comment,
-    Preprocessor,
-    PreprocessorArguments,
-    PreprocessorSymbol,
-    PreprocessorDirectiveExpected,
-    PreprocessorCommentExpected,
-    PreprocessorUnexpectedDirective,
+pub struct Whitespace {
+    pub span: Span,
+}
+
+impl Whitespace {
+    fn new (start: usize, end: usize) -> Whitespace {
+        Whitespace { span: Span::new(start, end),}
+    }
+}
+
+impl Scanner for Whitespace {
+    type Item = Whitespace;
+    fn scan(dy_parser: &DyParser) -> Option<Self::Item> {
+        let (mut start_at, end_at) = dy_parser.cursor_span();
+        let begin = start_at;
+        while start_at <= end_at {
+            let ch = dy_parser.source[start_at];
+            if ch == '\t' || ch == ' ' || ch == '\r' || ch == '\n' {
+                start_at += 1;
+            }
+            else {
+                break;
+            }
+        }
+        if start_at == begin {
+            return None;
+        }
+        return Some(Whitespace::new(begin, start_at-1 as usize));
+    }
+
+    fn get_span(&self) -> &Span {
+        return &self.span;
+    }
+}
 
 
-    VerbatimPrefix,    // @
-    InterpolatedPrefix,   // $
-    BoolLiteral,   // true, false
-    NullLiteral,  // bool
-    CharLiteral,
+#[derive(Debug)]
+pub enum CommentKind {
+    Single,
+    Multiple,
+}
+
+#[derive(Debug)]
+pub struct Comment {
+    pub kind: CommentKind,
+    pub span: Span,
+}
+
+impl Comment {
+    fn new(kind: CommentKind, start: usize, end: usize) -> Comment {
+        Comment {
+            kind,
+            span: Span::new(start, end),
+        }
+    }
+}
+
+impl Scanner for Comment {
+    type Item = Comment;
+    fn scan(dy_parser: &DyParser) -> Option<Self::Item> {
+        if dy_parser.look_ahead("//") {
+            let begin = dy_parser.cursor;
+            let line_ending = dy_parser.find_line_ending(dy_parser.cursor+2);
+            // dy_parser.cursor = line_ending + 1;
+            return Some(Comment::new(CommentKind::Single, begin, line_ending));
+        }
+        else if dy_parser.look_ahead("/*") {
+            let begin = dy_parser.cursor;
+            let comment_ending = dy_parser.find_next("*/", begin+2);
+            if comment_ending != 0 {
+                return Some(Comment::new(CommentKind::Multiple, begin, comment_ending));
+            }
+            // missing
+        }
+        return None
+    }
+
+    fn get_span(&self) -> &Span {
+        return &self.span;
+    }
+}
+
+
+#[derive(Debug)]
+pub enum StringKind {
+    Normal,
+    Verbatim,
+    Interpolated,
+}
+
+#[derive(Debug)]
+pub struct StringLiteral {
+    pub kind: StringKind,
+    pub span: Span,
+}
+
+
+impl Scanner for StringLiteral {
+    type Item = StringLiteral;
+    fn scan(dy_parser: &DyParser) -> Option<Self::Item> {
+        if dy_parser.look_ahead("@\"") {
+
+        }
+        else if dy_parser.look_ahead("$\"") {
+
+        }
+        else if dy_parser.look_ahead("\"") {
+
+        }
+        return None
+    }
+
+    fn get_span(&self) -> &Span {
+        return &self.span;
+    }
+}
+
+pub struct CharLiteral {
+    pub span: Span,
+}
+
+
+#[derive(Debug)]
+pub enum Token {
+    Whitespace(Whitespace),
+    Comment(Comment),
+
     StringLiteral,
     IntegerLiteral,
     RealLiteral,
-    PunctuatorOrOperator,  // 分隔符
+    CharLiteral,
+    BoolLiteral,
+    NullLiteral,
+
     Keyword,
     Identifier,
-    EOF,
-
+    Preprocessor,
+    Punctuator,
+    EoF,
 }
 
-
-#[derive(Debug)]
-#[derive(PartialEq)]
-#[repr(u8)]
-#[derive(Copy, Clone)]
-enum BlockState {
-    None,
-    Comment,
-    String,
-}
-
-#[derive(Debug)]
-struct SyntaxToken {
-    kind: TokenKind,
-    begin_at: usize,
-    end_at: usize,
-    block_state: BlockState,
-    line_index: usize,
-}
-
-impl SyntaxToken {
-    fn new(kind: TokenKind, begin_at: usize, end_at: usize) -> SyntaxToken {
-        SyntaxToken{kind, begin_at, end_at, block_state: BlockState::None, line_index: 0}
-    }
-}
-
-#[derive(Debug)]
-struct FormatedLine {
-    index: usize,
-    begin_at: usize,
-    end_at: usize,
-    tokens: Vec<SyntaxToken>,
-    block_state: BlockState,
-    // region: Option<RegionRef>,
-}
-
-impl FormatedLine {
-    fn new(index: usize, begin_at: usize, end_at: usize) -> FormatedLine {
-        FormatedLine{
-            index,
-            begin_at,
-            end_at,
-            tokens: Vec::new(),
-            block_state: BlockState::None,
-            // region: None,
-        }
-    }
-
-    fn push_token(&mut self, mut token: SyntaxToken) -> &SyntaxToken{
-        token.line_index = self.index;
-        self.tokens.put(token)
-    }
-}
-
-#[derive(Debug)]
-#[derive(PartialOrd, PartialEq)]
-#[derive(Copy, Clone)]
-pub enum RegionKind {
-    Root,
-    Region,
-    If,
-    Elif,
-    Else,
-    LastActive,
-    InactiveRegion,
-    InactiveIf,
-    InactiveElif,
-    InactiveElse,
-}
-
-
-#[derive(Debug)]
-struct Region {
-    kind: RegionKind,
-    line_index: usize,
-}
-
-impl Default for Region {
-    fn default() -> Region {
-        Region::new(RegionKind::Root, 0)
-    }
-}
-
-impl Region {
-    fn new(kind: RegionKind, line_index: usize) -> Region {
-        Region {
-            kind,
-            line_index,
-        }
-    }
-}
-
-type RegionRef = DyRef<Region>;
 
 
 #[derive(Debug)]
 pub struct DyParser {
     source: Vec<char>,
+    tokens: Vec<Token>,
     formated_lines: Vec<FormatedLine>,
     root_region: RegionRef,
+    cursor: usize,
+    line_offset: Vec<usize>,
 }
 
 
@@ -169,6 +213,9 @@ impl DyParser {
             source,
             formated_lines: Vec::new(),
             root_region: RegionRef::default(),
+            tokens: Vec::new(),
+            cursor: 0,
+            line_offset: Vec::new(),
         }
     }
 
@@ -180,26 +227,26 @@ impl DyParser {
             if *ch == '\r' || *ch == '\n' {
                 has_line_char = true;
             }
-            else {
-                if has_line_char {
-                    let pre_line_end = index - 1;
-                    let mut formated_line = FormatedLine::new(formated_line_count, pre_line_begin, pre_line_end);
-                    self.tokenize(&mut formated_line);
-                    if formated_line_count == 0 {
-                        // formated_line.region = self.root_region.clone()
-                        formated_line.block_state = BlockState::None;
+                else {
+                    if has_line_char {
+                        let pre_line_end = index - 1;
+                        let mut formated_line = FormatedLine::new(formated_line_count, pre_line_begin, pre_line_end);
+                        self.tokenize(&mut formated_line);
+                        if formated_line_count == 0 {
+                            // formated_line.region = self.root_region.clone()
+                            formated_line.block_state = BlockState::None;
+                        }
+                            else {
+                                let pre_line = &self.formated_lines[self.formated_lines.len()-1];
+                                // formated_line.region = pre_line.region.clone();
+                                formated_line.block_state = pre_line.block_state;
+                            }
+                        self.formated_lines.push(formated_line);
+                        formated_line_count += 1;
+                        pre_line_begin = index;
                     }
-                    else {
-                        let pre_line = &self.formated_lines[self.formated_lines.len()-1];
-                        // formated_line.region = pre_line.region.clone();
-                        formated_line.block_state = pre_line.block_state;
-                    }
-                    self.formated_lines.push(formated_line);
-                    formated_line_count += 1;
-                    pre_line_begin = index;
+                    has_line_char = false;
                 }
-                has_line_char = false;
-            }
         }
     }
 
@@ -215,6 +262,61 @@ impl DyParser {
         }
     }
 
+    fn cursor_span(&self) -> (usize, usize) {
+        return (self.cursor, self.source.len()-1)
+    }
+
+
+    fn look_ahead(&self, text: &str) -> bool {
+        return self.find_next(text, self.cursor) != 0;
+    }
+
+    // todo: 优化?
+    // return: end index
+    fn find_next(&self, text: &str, start_at: usize) -> usize {
+        let len = self.source.len();
+        if start_at >= len {
+            return 0;
+        }
+        let target: Vec<char> = text.chars().collect();
+        let target_len = target.len();
+        for i in start_at..len {
+            if target_len + i > len{
+                return 0;
+            }
+            let mut found = true;
+            for j in 0..target_len {
+                if target[j] != self.source[i] {
+                    found = false;
+                    break;
+                }
+            }
+            if found {
+                return i + target_len -1 as usize;
+            }
+        }
+        return 0;
+    }
+
+    fn find_line_ending(&self, start_at: usize) -> usize {
+        let len = self.source.len();
+        for i in start_at..len {
+            let ch = self.source[i];
+            if ch == '\n' {
+                return i;
+            }
+            else if ch == '\r' {
+                if i < len -1 && self.source[i+1] == '\n' {
+                    return i+1;
+                }
+                return i;
+            }
+        }
+        return len-1;
+    }
+
+
+
     fn get_string(&self, start_at: usize, end_at: usize) -> Option<String> {
         if start_at < end_at && end_at < self.source.len() {
             let it = &self.source[start_at..end_at+1];
@@ -225,7 +327,7 @@ impl DyParser {
 
     fn is_keyword(&self, start_at: usize, end_at: usize) -> bool {
         if let Some(x) = self.get_string(start_at, end_at) {
-            return KEY_WORDS.contains(&x.as_str());
+            return KEYWORDS.contains(&x.as_str());
         }
         return false;
     }
@@ -233,7 +335,7 @@ impl DyParser {
     fn is_keyword_or_built_type(&self, start_at: usize, end_at: usize) -> bool {
         if let Some(x) = self.get_string(start_at, end_at) {
             let word = x.as_str();
-            return KEY_WORDS.contains(&word) || BUILT_TYPES.contains(&word);
+            return KEYWORDS.contains(&word) || BUILTIN_TYPES.contains(&word);
         }
         return false;
     }
@@ -325,16 +427,16 @@ impl DyParser {
                 if (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' || ch < 'F') {
                     *start_at += 1;
                 }
-                else {
-                    break;
+                    else {
+                        break;
+                    }
+            }
+        }
+            else {
+                while *start_at <= end_at &&  '0' <= self.source[*start_at] && self.source[*start_at] <= '9'{
+                    *start_at += 1;
                 }
             }
-        }
-        else {
-            while *start_at <= end_at &&  '0' <= self.source[*start_at] && self.source[*start_at] <= '9'{
-                *start_at += 1;
-            }
-        }
         if hex {
             return Some(SyntaxToken::new(TokenKind::IntegerLiteral, begin, *start_at-1));
         }
@@ -347,9 +449,9 @@ impl DyParser {
                     if (ch == 'l' || ch == 'L') && (ch_next == 'u' || ch_next == 'U') {
                         *start_at += 1;
                     }
-                    else if ch_next == 'l' || ch_next == 'L' {
-                        *start_at += 1;
-                    }
+                        else if ch_next == 'l' || ch_next == 'L' {
+                            *start_at += 1;
+                        }
                 }
                 return Some(SyntaxToken::new(TokenKind::IntegerLiteral, begin, *start_at-1));
             }
@@ -362,9 +464,9 @@ impl DyParser {
                     point = true;
                     continue;
                 }
-                else {
-                    break;
-                }
+                    else {
+                        break;
+                    }
             }
             if !exponent && *start_at > begin && (ch == 'e' || ch == 'E'){
                 exponent = true;
@@ -388,9 +490,9 @@ impl DyParser {
         let kind = if point || exponent {
             TokenKind::RealLiteral
         }
-        else {
-            TokenKind::IntegerLiteral
-        };
+            else {
+                TokenKind::IntegerLiteral
+            };
         return Some(SyntaxToken::new(kind, begin, *start_at-1));
 
     }
@@ -419,12 +521,12 @@ impl DyParser {
         if self.source[begin] == 'u' {
             n = 4;
         }
-        else if self.source[begin] == 'U' {
-            n = 8;
-        }
-        else {
-            return false;
-        }
+            else if self.source[begin] == 'U' {
+                n = 8;
+            }
+                else {
+                    return false;
+                }
         begin += 1;
         while n >= 0 {
             if !self.scan_hex_digit(&mut begin, end_at) {
@@ -466,34 +568,34 @@ impl DyParser {
             if ch.is_alphabetic() || ch == '_' {
                 *start_at += 1;
             }
-            else if !self.scan_unicode_escape_char(start_at, end_at) {
-                if begin == *start_at {
-                    return None;
+                else if !self.scan_unicode_escape_char(start_at, end_at) {
+                    if begin == *start_at {
+                        return None;
+                    }
+                    return Some(SyntaxToken::new(TokenKind::Identifier, begin, *start_at-1));
                 }
-                return Some(SyntaxToken::new(TokenKind::Identifier, begin, *start_at-1));
-            }
-            else {
-                identifier = true;
-            }
+                    else {
+                        identifier = true;
+                    }
             while *start_at <= end_at {
                 let ch = self.source[*start_at];
                 if ch.is_alphabetic() || ch.is_digit(10) || ch == '_' {
                     *start_at += 1;
                 }
-                else if !self.scan_unicode_escape_char(start_at, end_at) {
-                    break;
-                }
-                else {
-                    identifier = true;
-                }
+                    else if !self.scan_unicode_escape_char(start_at, end_at) {
+                        break;
+                    }
+                        else {
+                            identifier = true;
+                        }
             }
         }
         let kind = if identifier {
             TokenKind::Identifier
         }
-        else {
-            TokenKind::Keyword
-        };
+            else {
+                TokenKind::Keyword
+            };
         return Some(SyntaxToken::new(kind, begin, *start_at-1));
     }
 
@@ -649,9 +751,9 @@ impl DyParser {
             if self.source_equal(x.begin_at, x.end_at, "true") {
                 return true;
             }
-            else if self.source_equal(x.begin_at, x.end_at, "false") {
-                return false;
-            }
+                else if self.source_equal(x.begin_at, x.end_at, "false") {
+                    return false;
+                }
             // todo: vm compilation define
             return false;
         }
@@ -689,5 +791,133 @@ impl DyParser {
 //        }
 //    }
 }
+
+
+
+
+
+
+#[derive(Debug)]
+#[derive(PartialEq)]
+enum TokenKind {
+    Missing,
+    Whitespace,
+    Comment,
+    Preprocessor,
+    PreprocessorArguments,
+    PreprocessorSymbol,
+    PreprocessorDirectiveExpected,
+    PreprocessorCommentExpected,
+    PreprocessorUnexpectedDirective,
+
+
+    VerbatimPrefix,    // @
+    InterpolatedPrefix,   // $
+    BoolLiteral,   // true, false
+    NullLiteral,  // bool
+    CharLiteral,
+    StringLiteral,
+    IntegerLiteral,
+    RealLiteral,
+    PunctuatorOrOperator,  // 分隔符
+    Keyword,
+    Identifier,
+    EOF,
+
+}
+
+
+#[derive(Debug)]
+#[derive(PartialEq)]
+#[repr(u8)]
+#[derive(Copy, Clone)]
+enum BlockState {
+    None,
+    Comment,
+    String,
+}
+
+#[derive(Debug)]
+struct SyntaxToken {
+    kind: TokenKind,
+    begin_at: usize,
+    end_at: usize,
+    block_state: BlockState,
+    line_index: usize,
+}
+
+impl SyntaxToken {
+    fn new(kind: TokenKind, begin_at: usize, end_at: usize) -> SyntaxToken {
+        SyntaxToken{kind, begin_at, end_at, block_state: BlockState::None, line_index: 0}
+    }
+}
+
+#[derive(Debug)]
+struct FormatedLine {
+    index: usize,
+    begin_at: usize,
+    end_at: usize,
+    tokens: Vec<SyntaxToken>,
+    block_state: BlockState,
+    // region: Option<RegionRef>,
+}
+
+impl FormatedLine {
+    fn new(index: usize, begin_at: usize, end_at: usize) -> FormatedLine {
+        FormatedLine{
+            index,
+            begin_at,
+            end_at,
+            tokens: Vec::new(),
+            block_state: BlockState::None,
+            // region: None,
+        }
+    }
+
+    fn push_token(&mut self, mut token: SyntaxToken) -> &SyntaxToken{
+        token.line_index = self.index;
+        self.tokens.put(token)
+    }
+}
+
+#[derive(Debug)]
+#[derive(PartialOrd, PartialEq)]
+#[derive(Copy, Clone)]
+pub enum RegionKind {
+    Root,
+    Region,
+    If,
+    Elif,
+    Else,
+    LastActive,
+    InactiveRegion,
+    InactiveIf,
+    InactiveElif,
+    InactiveElse,
+}
+
+
+#[derive(Debug)]
+struct Region {
+    kind: RegionKind,
+    line_index: usize,
+}
+
+impl Default for Region {
+    fn default() -> Region {
+        Region::new(RegionKind::Root, 0)
+    }
+}
+
+impl Region {
+    fn new(kind: RegionKind, line_index: usize) -> Region {
+        Region {
+            kind,
+            line_index,
+        }
+    }
+}
+
+type RegionRef = DyRef<Region>;
 
 

@@ -10,7 +10,7 @@ Just do it, and make it difference!
 
 2.编译器检查：开发高效
 
-3.可编程：定制化
+3.可编程：定制化?
 
 
 ## Inspired by
@@ -18,3 +18,7 @@ Just do it, and make it difference!
 wren: https://github.com/munificent/wren
 
 Script Inspector: https://assetstore.unity.com/packages/tools/visual-scripting/script-inspector-3-3535
+
+C# reference: https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/index
+
+Rusty EcmaScript Scanner: https://github.com/FreeMasen/ress
