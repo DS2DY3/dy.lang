@@ -428,12 +428,19 @@ pub struct Keyword {
 
 impl Scanner for Keyword {
     fn scan(dy_sparser: &DyParser) -> Option<Token> {
+        let begin = dy_sparser.cursor;
+        let mut start_at = begin;
         for keyword in KEYWORDS.iter() {
             if dy_sparser.look_ahead(keyword) {
-
+                start_at += keyword.len();
+                if !dy_sparser.is_alphanumeric_at(start_at) {
+                    return Some(Token::Keyword(Keyword {
+                        span: Span::new(begin, start_at-1),
+                    }));
+                }
             }
         }
-        return None
+        return None;
     }
 }
 
@@ -445,7 +452,23 @@ pub struct Identifier {
 
 impl Scanner for Identifier {
     fn scan(dy_sparser: &DyParser) -> Option<Token> {
-        None
+        let begin = dy_sparser.cursor;
+        let mut start_at = begin;
+        let len = dy_sparser.source.len();
+        let mut ch = dy_sparser.source[start_at];
+
+        if ch.is_ascii_alphabetic() || ch == '_' {
+            start_at += 1;
+            while start_at < len {
+                if dy_sparser.is_alphanumeric_at(start_at) {
+                    start_at += 1;
+                }
+            }
+            return Some(Token::Identifier(Identifier {
+                span: Span::new(begin, start_at-1),
+            }));
+        }
+        return None;
     }
 }
 
@@ -457,7 +480,19 @@ pub struct Contextual {
 
 impl Scanner for Contextual {
     fn scan(dy_sparser: &DyParser) -> Option<Token> {
-        None
+        let begin = dy_sparser.cursor;
+        let mut start_at = begin;
+        for contextual in CONTEXTUALS.iter() {
+            if dy_sparser.look_ahead(contextual) {
+                start_at += contextual.len();
+                if !dy_sparser.is_alphanumeric_at(start_at) {
+                    return Some(Token::Contextual(Contextual {
+                        span: Span::new(begin, start_at-1),
+                    }));
+                }
+            }
+        }
+        return None
     }
 }
 
@@ -469,7 +504,20 @@ pub struct Punctuator {
 
 impl Scanner for Punctuator {
     fn scan(dy_sparser: &DyParser) -> Option<Token> {
-        None
+        let begin = dy_sparser.cursor;
+        let mut start_at = begin;
+        for punctuator in PUNCTUATORS.iter() {
+            if dy_sparser.look_ahead(punctuator) {
+                start_at += punctuator.len();
+                if !dy_sparser.is_alphanumeric_at(start_at) {
+                    return Some(Token::Punctuator(Punctuator {
+                        span: Span::new(begin, start_at-1),
+                    }));
+                }
+            }
+        }
+        return None;
+
     }
 }
 
@@ -521,48 +569,19 @@ impl DyParser {
         }
     }
 
-    pub fn lex_line(&mut self) {
-        let mut has_line_char = false;
-        let mut pre_line_begin= 0;
-        let mut formated_line_count = 0;
-        for (index, ch) in self.source.iter().enumerate() {
-            if *ch == '\r' || *ch == '\n' {
-                has_line_char = true;
+    pub fn lexer(&mut self) {
+        let len = self.source.len();
+//        let scans = vec![Keyword::scan, Contextual::scan, Punctuator::scan, Identifier::scan, RealLiteral::scan, CharLiteral::scan,
+//            StringLiteral::scan, IntegerLiteral::scan, BoolLiteral::scan, NullLiteral::scan, Comment::scan, Whitespace::scan];
+        while self.cursor < len {
+            let begin = self.cursor;
+            let keyword_op = Keyword::scan(self);
+            let Some(keyword) = keyword_op {
+               
             }
-                else {
-                    if has_line_char {
-                        let pre_line_end = index - 1;
-                        let mut formated_line = FormatedLine::new(formated_line_count, pre_line_begin, pre_line_end);
-                        self.tokenize(&mut formated_line);
-                        if formated_line_count == 0 {
-                            // formated_line.region = self.root_region.clone()
-                            formated_line.block_state = BlockState::None;
-                        }
-                            else {
-                                let pre_line = &self.formated_lines[self.formated_lines.len()-1];
-                                // formated_line.region = pre_line.region.clone();
-                                formated_line.block_state = pre_line.block_state;
-                            }
-                        self.formated_lines.push(formated_line);
-                        formated_line_count += 1;
-                        pre_line_begin = index;
-                    }
-                    has_line_char = false;
-                }
         }
     }
 
-    fn tokenize(&self, formated_line: &mut FormatedLine) {
-        let mut start_at = formated_line.begin_at;
-        let end_at = formated_line.end_at;
-        let ws = self.scan_whitespace(&mut start_at, end_at);
-        if let Some(x) = ws {
-            formated_line.push_token(x);
-        }
-        if formated_line.block_state == BlockState::None && start_at <= end_at && self.source[start_at] == '#' {
-
-        }
-    }
 
     fn cursor_span(&self) -> (usize, usize) {
         return (self.cursor, self.source.len()-1)
@@ -621,7 +640,8 @@ impl DyParser {
         if start_at >= self.source.len() {
             return false;
         }
-        return self.source[start_at].is_alphanumeric();
+        let ch = self.source[start_at];
+        return ch.is_alphanumeric() || ch == '_';
     }
 
     fn get_string(&self, start_at: usize, end_at: usize) -> Option<String> {

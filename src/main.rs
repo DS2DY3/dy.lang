@@ -22,7 +22,7 @@ fn main() {
 	f.read_to_string(&mut contents)
 		.expect("something went wrong reading the file");
 	let mut dy_parser = DyParser::new(contents);
-	dy_parser.lex_line();
+	dy_parser.lexer();
 
 	println!("With parser:\n{:#?}", dy_parser);
 	println!("Hello World, DY!");
